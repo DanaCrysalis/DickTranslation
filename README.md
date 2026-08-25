@@ -8,10 +8,11 @@ which is why ordinary text-extraction tools find nothing in its 87 MB archive. T
 repository documents the formats, provides tools to extract and reinsert the script,
 and contains the recovered index-to-character map.
 
-**Status: script and font are both solved.** 1,064 dialogue messages (~39,500
-characters) can be dumped and patched back. The character map is 98% complete by text
+**Status: research complete.** 1,064 dialogue messages (~39,500 characters) can be
+dumped and patched back, at **changed lengths** — the offset table can be rebuilt and
+the archive repacked, verified in-game. The character map is 98% complete by text
 volume. The glyph font has been located and decoded, so glyphs can be read directly
-and repainted — an English patch is no longer blocked on format work.
+and repainted. Nothing about an English patch is blocked on format work any more.
 
 ---
 
@@ -37,6 +38,11 @@ python tools/font.py dump out/0004.bin sheet.png
 
 To prove reinsertion works on your own copy, `tools/patch_poc.py DICK.DAT` rewrites
 the game's first spoken line and `--revert` puts it back.
+
+To edit messages at a *different* length — which any translation requires — use
+`tools/script_edit.py`, which rebuilds the entry's offset table. Always run its
+`verify` first: it cross-checks the parsed entry against `dialogue.xlsx` and catches
+both a misparse and an archive left dirty by a `glyphdump` pass.
 
 ---
 

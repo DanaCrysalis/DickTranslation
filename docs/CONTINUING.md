@@ -90,7 +90,16 @@ Targets, all 36 or 84 units so no message length ever changes:
 | `--intro` | Lin's opening line | 36 |
 
 **Always restore `DICK.DAT.bak` before starting a fresh run** rather than relying on
-`--revert` alone.
+`--revert` alone, and **verify the archive afterwards**:
+
+```bash
+python tools/script_edit.py verify out/0023.bin dialogue.xlsx 23
+```
+
+A dump pass leaves the message the same *length*, so nothing downstream notices it
+until something unrelated fails and gets blamed. This has already cost one wasted
+test cycle: a `push` experiment appeared to corrupt the bridge villager when in fact
+the archive still carried the final `0x696` pass from a dump session.
 
 If you do read from screenshots, note that the light face layer is drawn at
 `-0x282` from the shadow, so an extracted bitmap sits two pixels up and two left of

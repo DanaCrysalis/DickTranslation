@@ -14,6 +14,10 @@
 - **Text renderer** — three-pass draw, palette roles, 19-pixel advance, all read
   from the overlay code rather than inferred.
 - **Picture codec** — skip/run stream used by artwork entries.
+- **Variable-length reinsertion.** A message can grow, the offset table can be
+  rebuilt and the archive repacked. Verified in-game: entry 23 was inflated from
+  30,626 to 51,566 bytes (+68%) and a message pushed from byte 11,165 to 32,105
+  still rendered correctly.
 - **Overlay/asset map**, **save format**, **icon and portrait banks**, **audio**.
 
 ## Numbers
@@ -96,3 +100,19 @@ available slots once translated Chinese glyphs are freed.
 
 None of this avoids the **u8 unit count**: at 1.5× unit growth, 37 messages exceed
 255 units and must be split. That is the real remaining constraint, not the font.
+
+Entry growth is proven to 32,105 bytes deep in entry 23. A full translation needs
+that entry at roughly 45,127 bytes, so a ~13 KB window is untested — the technique
+cannot probe further because the messages ahead of the reachable one are already at
+the 255-unit ceiling. The risk is low (the loader takes its size from the TOC, and a
+buffer sized to the retail 30,626 bytes would already have failed at 32,105), and
+translating chapter 1 first exercises that region as a by-product.
+
+### Order of work
+
+1. Locate the menu / item / spell name tables — the only shippable-patch blocker.
+   Now tractable: search entries for known index sequences from `charmap.json`.
+2. Design the digraph font: `font.py export`, draw 8x8 letter pairs into free slots,
+   `font.py import`.
+3. Write the line-setter: wrap at 24 columns, pad each line to exactly 12 units.
+4. Translate, splitting the 37 messages that breach 255 units.

@@ -28,6 +28,9 @@ import os
 import shutil
 import sys
 
+# WARNING: absolute file offset, valid only for the RETAIL archive layout.
+# Once any entry changes size (see tools/script_edit.py) every later entry
+# shifts and this constant is wrong. Re-derive it from the TOC first.
 ENTRY_BASE = 0x1E5AA6          # entry 23's offset within DICK.DAT
 COUNT_OFF = ENTRY_BASE + 0x0FA1
 UNITS_OFF = ENTRY_BASE + 0x0FA2

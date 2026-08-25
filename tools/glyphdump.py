@@ -17,7 +17,7 @@ Pass --intro to target the opening line (entry 23 message 0) instead.
     python glyphdump.py DICK.DAT 33       # shows 0x021-0x041
     python glyphdump.py DICK.DAT --revert # restore the original line
 
-Each pass shows 33 glyphs; the game wraps at twelve per line, so they read as
+Each pass shows 81 glyphs; the game wraps at twelve per line, so they read as
 12 + 12 + 9. Work upward in steps of 33.
 
 The replacement always fills exactly the original 36 units, padded with the
@@ -28,6 +28,9 @@ import os
 import shutil
 import sys
 
+# WARNING: absolute file offset, valid only for the RETAIL archive layout.
+# Once any entry changes size (see tools/script_edit.py) every later entry
+# shifts and this constant is wrong. Re-derive it from the TOC first.
 ENTRY_BASE = 0x1E5AA6          # entry 23 within DICK.DAT
 
 # both targets are 36 units, so a patch never changes any message length
@@ -110,6 +113,22 @@ def main():
     if not os.path.exists(backup):
         shutil.copy2(path, backup)
         print(f"backup written to {backup}")
+
+    # A previous pass leaves the message the same LENGTH, so the unit-count
+    # guard above cannot see it. Compare the actual units instead: dumping on
+    # top of a dump is harmless, but forgetting to revert afterwards leaves the
+    # archive silently non-pristine and breaks any later editing work.
+    if not revert:
+        with open(path, "rb") as f:
+            f.seek(units_off)
+            current = f.read(unit_count * 2)
+        if current != pack(ORIGINALS[which]):
+            print(f"NOTE: message for --{which} does not hold its original text; "
+                  f"a previous pass is still applied.")
+            print(f"      {backup} holds the pristine archive. Run --revert "
+                  f"when finished dumping, and verify with:")
+            print(f"      python tools/script_edit.py verify out/0023.bin "
+                  f"dialogue.xlsx 23")
 
     with open(path, "r+b") as f:
         f.seek(units_off)
