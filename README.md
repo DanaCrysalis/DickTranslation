@@ -10,8 +10,8 @@ and contains the recovered index-to-character map.
 
 **Status: research complete.** 1,064 dialogue messages (~39,500 characters) can be
 dumped and patched back, at **changed lengths** — the offset table can be rebuilt and
-the archive repacked, verified in-game. The character map is 98% complete by text
-volume. The glyph font has been located and decoded, so glyphs can be read directly
+the archive repacked, verified in-game. The character map is **100% complete by text
+volume** - every glyph index the dialogue uses is identified. The glyph font has been located and decoded, so glyphs can be read directly
 and repainted. Nothing about an English patch is blocked on format work any more.
 
 ---
@@ -149,7 +149,7 @@ tools/
   glyphdump.py    display a chosen glyph range in-game so it can be read
   patch_poc.py    minimal proof that message reinsertion works
 data/
-  charmap.json    1,603 verified index → character mappings
+  charmap.json    1,668 verified index → character mappings
   unmapped.txt    indices the script uses that are not yet identified
   free_slots.txt  slots the script never references — repaintable for Latin
   loadmap.txt     which archive entries each code overlay loads, and where

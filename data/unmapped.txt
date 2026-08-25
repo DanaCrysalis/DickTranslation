@@ -1,74 +1,8 @@
 # Glyph indices the script uses that are not yet identified.
-# 65 indices, 2.0% of all text units.
-# The font is decoded, so read these directly rather than dumping in-game:
-#   python tools/font.py export out/0004.bin glyphs/   then open glyphs/<index>.png
-# Verify any reading by decoding the script and checking it reads as Chinese
-# (see docs/CONTINUING.md) - that is the only check that catches a wrong
-# reading which collides with nothing.
+# NONE - every index the dialogue uses is now mapped (100%% coverage).
+#
+# Resolved by rendering the font directly rather than dumping in-game:
+#   python tools/font.py export out/0004.bin glyphs/
+# Any future unknown can be read the same way; no glyphdump pass needed.
 
 index	uses
-0x0286	113
-0x0287	52
-0x0288	51
-0x0284	47
-0x02a6	44
-0x028f	40
-0x028e	40
-0x02ab	32
-0x0296	28
-0x0285	23
-0x02af	21
-0x0298	20
-0x02ba	19
-0x0290	18
-0x0292	18
-0x02c2	17
-0x0280	17
-0x029a	16
-0x0289	13
-0x02b9	11
-0x0294	11
-0x02b6	9
-0x02ae	8
-0x02b7	8
-0x02bb	8
-0x05b2	8
-0x0283	7
-0x029e	6
-0x0279	6
-0x02c5	5
-0x027b	5
-0x0297	4
-0x02c6	4
-0x054e	4
-0x02c9	4
-0x02b8	3
-0x02a1	3
-0x05ff	3
-0x02bd	3
-0x0643	3
-0x02b0	2
-0x028a	2
-0x027a	2
-0x02c8	2
-0x02b3	2
-0x0293	2
-0x02a8	2
-0x02a3	2
-0x0295	2
-0x029f	2
-0x029c	2
-0x05e3	2
-0x02c3	2
-0x02c4	1
-0x0505	1
-0x058b	1
-0x02a0	1
-0x0584	1
-0x05c5	1
-0x020d	1
-0x02b4	1
-0x02b5	1
-0x0658	1
-0x0660	1
-0x02a2	1

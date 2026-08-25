@@ -27,8 +27,8 @@
 | messages extracted | 1,064 clean (of 1,108 parsed; 44 over-read) |
 | characters of dialogue | ~39,500 |
 | distinct glyph indices used | 1,508 |
-| characters mapped | 1,603 |
-| coverage by text volume | 98.0% |
+| characters mapped | 1,668 |
+| coverage by text volume | 100% |
 | highest index used by script | `0x069B` |
 | font slots | 2,048 (353 blank) |
 | slots the script never references | 540 |
@@ -41,8 +41,7 @@
   behaves unexpectedly. Flagged in the spreadsheet, individually identifiable.
 - **How script entries reach memory.** No overlay in `loadmap.txt` loads entries
   23/249/390/625/794, so `cmd_loadmap` is missing a code path.
-- **Remaining unidentified indices.** See `data/unmapped.txt`. With the font
-  decoded these can now be read directly instead of through in-game passes.
+
 
 ## Known weaknesses
 

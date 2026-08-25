@@ -106,7 +106,22 @@ If you do read from screenshots, note that the light face layer is drawn at
 the glyph as stored. That offset is why byte-level searches for the font failed for
 so long.
 
-## What's left
+## What's left (nothing, for dialogue)
+
+Every glyph index the dialogue uses is now identified. The last 65 were resolved
+by rendering them straight out of the font and reading them - no dumping, no
+context inference. Among them were the three highest-frequency unknowns,
+`0x286`/`0x287`/`0x288`, which turned out to be the name 艾沙娜; they had never
+appeared in a glyphdump pass because those slots sit below 0x4B0.
+
+If a new unknown appears (menus and item tables use vocabulary the dialogue does
+not), read it the same way:
+
+```bash
+python tools/font.py export out/0004.bin glyphs/   # then open glyphs/<index>.png
+```
+
+## Historical: what was left
 
 `data/unmapped.txt` lists every index the script uses that isn't identified. 13
 indices were deliberately left unmapped rather than guessed; each has an ambiguous
