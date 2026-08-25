@@ -1,8 +1,20 @@
-# Glyph indices the script uses that are not yet identified.
-# NONE - every index the dialogue uses is now mapped (100%% coverage).
+# Glyph indices not yet identified.
 #
-# Resolved by rendering the font directly rather than dumping in-game:
-#   python tools/font.py export out/0004.bin glyphs/
-# Any future unknown can be read the same way; no glyphdump pass needed.
+# Only 4 remain, and each is AMBIGUOUS rather than unread: the rendered
+# glyph resembles a character already mapped to a different slot, and the
+# font contains NO duplicate bitmaps - so one side of each pair is a
+# misreading and it is not yet clear which.
+#
+# index   looks like   conflicts with
+# 0x02c3   塵            0x03c3
+# 0x02c8   撤            0x0645
+# 0x05cd   柴            0x0575
+# 0x05d3   藹            0x04a4
+#
+# Render both and compare: python tools/font.py export out/0004.bin glyphs/
 
 index	uses
+0x02c3	?
+0x02c8	?
+0x05cd	?
+0x05d3	?
