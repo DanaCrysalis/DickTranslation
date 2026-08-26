@@ -123,19 +123,118 @@ add  edi, 0x130                  ; 304 = 320 - 16, next row
 
 Portraits use the same loop at `+0xA108`.
 
+## UI, menu and battle strings
+
+These are **not** in a data entry. They live inside the code overlays, and every
+overlay carries a copy: the field and system menus appear in all 89, battle
+strings only in entries 48, 258, 416, 612 and 790.
+
+```
+u16 count
+u16 * count   glyph indices
+u16 trailer   purpose unknown; preserved verbatim when patching
+```
+
+Records usually sit back to back, but not always: the spell schools are 12 bytes
+apart with a 2-byte gap, and the retreat block is a run of only three. Any
+scanner that requires long contiguous chains will silently miss whole tables.
+
+Copies are **not** byte-identical. Entry 48 holds the field menu at `0x12E8`,
+entry 47 at `0x12D6`, and entry 47 has 46 records where most overlays have 58.
+Locate records by content, never by offset.
+
+### Spaced labels
+
+Menu labels space their characters apart, so the two halves are never adjacent
+in memory:
+
+```
+0x0A172   3 units   攻 · 擊      (0x0108, 0x0066, 0x0109)
+```
+
+The middle unit is the full-width space. Searching for the character pair
+`0108 0109` will not find the battle menu.
+
+### Runtime-filled units
+
+Two kinds of unit are written by the engine while drawing and must be preserved:
+
+| unit | meaning |
+|---|---|
+| `0x0066` | full-width space; in `等級··升至··` these receive digits |
+| `0x0000` | placeholder; receives a character name |
+
+`等級··升至··` renders as `等級 12 升至 13`. Overwriting the `·` units breaks the
+substitution, so a translation must leave them alone.
+
+### Templates rewritten at runtime
+
+The battle menu's third option is a template. The stored record is `特·技`, but
+units 0 and 2 are replaced at draw time with the character's class skill name,
+taken from a bare 2-unit array at `0x09739` in entry 48:
+
+```
+特技 劍技 弓術 精神 特技 斧擊 無· 武技 刀法 槍技 神法
+```
+
+Only the middle unit is static. The label therefore renders as
+
+```
+[class unit 0][static middle][class unit 1]
+```
+
+so a single English word has to be split across all three — "Sk" + "il" + "l ".
+Because every class shares one middle cell, per-class English names are
+impossible without a code change.
+
+### Vocabulary outside the dialogue
+
+Menus use characters the script never does, so they are absent from
+`charmap.json` until read out of the font. `0x282` 頁 and `0x291` `/` were found
+this way. A record containing an unmapped index cannot be decoded and will be
+skipped entirely, which looks identical to the record not existing.
+
+
+## Item, spell and monster names — entry 1098
+
+Entry 1098 is the game's data bank, not only an icon sheet. Before the icons it
+holds fixed-width name/description records:
+
+```
+record stride  0x50 (80 bytes), first record at 0x145
++0x42          name field,        8 units, padded with 0x0000
++0x52          description field, 14 units, padded with 0x0066
+remainder      binary stats
+```
+
+236 populated records. Sections are positional rather than tagged: items first,
+spells from roughly 0x4500, monsters from roughly 0x8000, with unpopulated gaps
+between. The icon sheet at 0x4E20 and portraits at 0xA108 sit inside the same
+entry.
+
+Field widths translate to **16 Latin characters for a name and 28 for a
+description** at two letters per cell - far more generous than the menu tables.
+
+`tools/names.py` dumps these to JSON, and patches translations back in place.
+
 ## Picture entries — skip/run codec
 
 Entries whose first bytes are `01 ff ff` or `02 ff ff` (and entry 21, tagged `03`)
 carry a run-length stream:
 
 ```
+u8            mode: 0 = stream begins with a skip, non-zero = begins with a run
 repeat:
-  u16 skip      transparent pixels to advance
-  u16 len       literal pixel count
-  u8 * len      literal 8bpp pixels
-until:
-  ff ff         end of image
+  u16 skip    transparent pixels to advance (0xFFFF ends the image)
+  u16 len     literal pixel count           (0xFFFF also ends)
+  u8 * len    literal 8bpp pixels
 ```
+
+Read from the decoder in overlay 13 at `0x25DA`. The leading mode byte is easy
+to miss; omitting it puts every image one byte out of phase and decodes to
+noise. Image dimensions are **not** in the stream - the decode loop walks a
+table of 16-byte descriptors at `[ebx+0x7DD6]`, which has not yet been located.
+Without it, widths can only be guessed.
 
 Multiple images follow one another in a single entry. On entry 21 this decodes 24
 images and accounts for 98.1% of the entry. Row width is implicit: within one image

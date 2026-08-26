@@ -18,6 +18,14 @@
   rebuilt and the archive repacked. Verified in-game: entry 23 was inflated from
   30,626 to 51,566 bytes (+68%) and a message pushed from byte 11,165 to 32,105
   still rendered correctly.
+- **UI / menu / battle strings.** Located inside the code overlays, format
+  documented, and translatable in place with `tools/uitext.py`. 118 records per
+  battle overlay rewritten to English and confirmed in-game: battle menu, spell
+  and item sub-menus, level-up lines, retreat, monster actions, status panel,
+  field and system menus.
+- **Latin font generation.** `tools/mkfont.py` packs two 8x16 letters into each
+  16x16 cell, so English costs roughly 1.5 cells per original cell and needs no
+  engine change.
 - **Overlay/asset map**, **save format**, **icon and portrait banks**, **audio**.
 
 ## Numbers
@@ -27,7 +35,7 @@
 | messages extracted | 1,064 clean (of 1,108 parsed; 44 over-read) |
 | characters of dialogue | ~39,500 |
 | distinct glyph indices used | 1,508 |
-| characters mapped | 1,668 |
+| characters mapped | 1,686 |
 | coverage by text volume | 100% |
 | highest index used by script | `0x069B` |
 | font slots | 2,048 (353 blank) |
@@ -35,8 +43,16 @@
 
 ## Not solved
 
-- **Menu / item / spell name tables.** Same encoding, different container — no
-  length-prefixed message structure, so the script parser skips them.
+- **Menu and title artwork.** The title screen options (開始新遊戲 / 繼續舊冒險)
+  are images, proven by the font not being resident in memory at the title. The
+  image codec is understood but the 16-byte descriptor table that carries
+  dimensions has not been found, so images cannot yet be re-encoded.
+- **Item, spell and monster names.** Located and readable - entry 1098, 0x50
+  stride, 236 records, name +0x42 and description +0x52 (see FORMATS.md).
+  `tools/names.py` reads and patches them; the English is not yet written.
+- **Character names** (狄克 / 琳) and the battle HP/MP plate, which are not in the
+  overlay string tables.
+
 - **44 over-read messages.** 4% of the total; the length byte or a table slot
   behaves unexpectedly. Flagged in the spreadsheet, individually identifiable.
 - **How script entries reach memory.** No overlay in `loadmap.txt` loads entries
@@ -48,9 +64,12 @@
 - The character map was read by eye. The reliable check is decoding the script and
   reading it for sense; that caught 46 errors in one pass, including many that
   collide with nothing and are invisible to duplicate detection.
-- **Duplicate detection produces false positives.** The font contains duplicate
-  characters — `0x353` and `0x524` are both 越, both used, in overlapping chapters.
-  A duplicate is a prompt to check, not proof of a misreading.
+- **Duplicate detection is reliable, and I once recorded the opposite.** The font
+  contains **no duplicate bitmaps at all**: 1695 distinct glyphs in 1695 non-blank
+  slots. Every pair once believed to be "the same character twice" was a
+  misreading — `0x524` is 愈 not 越, `0x55A` is 鑲 not 鏡, `0x5EA` is 筋 not 箭,
+  `0x66D` is 脊 not 祭. So any character appearing twice in `charmap.json` is a
+  bug, and that check should be run routinely.
 - Several glyphs were deliberately left unmapped rather than guessed. 13 remain,
   listed in the notes accompanying the last mapping pass.
 - Coverage percentages are by text volume, so they overstate how much of the *rare*

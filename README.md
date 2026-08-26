@@ -36,6 +36,13 @@ python tools/font.py dump out/0004.bin sheet.png
 
 `script/_index.txt` lists which entries hold dialogue and how many messages each has.
 
+To put the menus and battle text into English:
+
+```bash
+python tools/uitext.py patchall out/ --preset battle_full
+python tools/dickdat.py pack out/ DICK.DAT.new
+```
+
 To prove reinsertion works on your own copy, `tools/patch_poc.py DICK.DAT` rewrites
 the game's first spoken line and `--revert` puts it back.
 
@@ -116,6 +123,20 @@ Allocation was not deduplicated: some characters own **two** slots. `0x353` and
 `0x524` are both 越 and both used in overlapping chapters. Treat a duplicate as
 evidence to check, not proof of error.
 
+### UI, menu and battle strings
+
+Not in a data entry — inside the **code overlays**, one copy each. The field and
+system menus appear in all 89 overlays; battle strings only in entries 48, 258,
+416, 612 and 790. Records are `u16 count`, that many glyph indices, then a `u16`
+trailer.
+
+Three things make them awkward, all documented in FORMATS.md: menu labels space
+their characters apart (攻 · 擊, so the pair is never adjacent), some units are
+filled by the engine at draw time, and the battle menu's third option is a
+template whose outer units are replaced from a class skill table.
+
+`tools/uitext.py` dumps and translates them in place, preserving byte length.
+
 ### Where things live
 
 - **Dialogue**: entries 23, 249, 390, 625, 794 — one block per chapter.
@@ -130,10 +151,12 @@ evidence to check, not proof of error.
 
 ### Not found
 
-- **Menu, item and spell name tables.** They use the same glyph indices but are not
-  length-prefixed message blocks, so the script parser skips them. The character map
-  now covers their vocabulary (裝備, 咒文, 狀態, 鐵劍, 匕首 …), which should make
-  them findable by searching for known index sequences.
+- **English wording for item, spell and monster names.** The tables themselves
+  are solved (entry 1098, 0x50 stride, 236 records) and `tools/names.py` reads
+  and patches them; only the translation itself is outstanding.
+- **Menu and title artwork.** The title options are images — the font is not even
+  resident in memory at the title screen. The image codec is understood; the
+  descriptor table carrying image dimensions is not yet located.
 - **How script entries are loaded.** `loadmap.txt` records no overlay loading entries
   23/249/390/625/794, so dialogue reaches memory by a path `cmd_loadmap` doesn't
   trace. Not blocking anything, but the resource map is incomplete.
@@ -147,9 +170,14 @@ tools/
   dickdat.py      archive: list, extract, pack, find, render, loadmap, text, script, learn
   font.py         font: dump, export, import, free  (entry 4)
   glyphdump.py    display a chosen glyph range in-game so it can be read
+  script_edit.py  edit dialogue at CHANGED lengths (rebuilds the offset table)
+  uitext.py       dump and translate the UI / menu / battle string tables
+  names.py        item / spell / monster names in entry 1098
+  mkfont.py       build a Latin digraph font into free glyph slots
+  poc_english.py  one-line English proof of concept
   patch_poc.py    minimal proof that message reinsertion works
 data/
-  charmap.json    1,668 verified index → character mappings
+  charmap.json    1,686 verified index → character mappings
   unmapped.txt    indices the script uses that are not yet identified
   free_slots.txt  slots the script never references — repaintable for Latin
   loadmap.txt     which archive entries each code overlay loads, and where

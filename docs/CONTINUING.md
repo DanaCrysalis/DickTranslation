@@ -36,6 +36,30 @@ including several that were pixel-plausible and had survived every other check:
 
 Read the sentence, not the glyph.
 
+## UI strings are a separate job from dialogue
+
+Menus, battle messages and status labels live in the code overlays, not in a
+script entry, and use a different record format (see FORMATS.md). Work on them
+with `tools/uitext.py`:
+
+```bash
+python tools/uitext.py dump out/0048.bin            # inventory one overlay
+python tools/uitext.py patchall out --preset battle_full
+```
+
+Three traps, each of which cost a test cycle:
+
+1. **Menu vocabulary is not in the dialogue charmap.** A record containing an
+   unmapped index cannot be decoded and is skipped, which looks exactly like the
+   record not existing. If something stays Chinese, dump the bytes and read the
+   unknown glyph out of the font before assuming the string is missing.
+2. **Tables are not always contiguous.** Requiring long chains of adjacent
+   records silently skipped the spell schools and the whole retreat block.
+3. **Some units are filled at runtime.** `·` receives digits and `_` receives a
+   name; overwrite them and the substitution breaks. Mark them `~~` in a preset
+   to preserve them, and start such strings with a space or the name will run
+   straight into the text.
+
 ## Duplicate and mismatch checks
 
 Merge new readings against `data/charmap.json` and look for:
@@ -44,13 +68,16 @@ Merge new readings against `data/charmap.json` and look for:
    readings is wrong.
 2. **Duplicates** — two indices mapped to the same character.
 
-**Duplicates are no longer conclusive.** The font contains genuine duplicate
-characters: `0x353` and `0x524` are both 越, both used, in overlapping chapters. Slot
-allocation was not deduplicated. When a duplicate appears, decide it by looking at
-how each index is used in the decoded script, not by assuming a misreading.
+**Duplicates are conclusive.** The font holds 1695 distinct bitmaps in 1695
+non-blank slots — there are no duplicate glyphs anywhere. So if two indices map to
+the same character, one reading is definitely wrong. Render both and compare:
 
-A duplicate whose second slot the script never references is usually a real
-duplicate, and is a good repaint target.
+```bash
+python tools/font.py export out/0004.bin glyphs/
+```
+
+An earlier revision of this document claimed the opposite, on the strength of
+`0x353`/`0x524` both reading as 越. They are 越 and 愈.
 
 ## Bitmaps and readings are separate things
 

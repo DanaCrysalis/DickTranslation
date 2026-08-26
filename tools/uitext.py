@@ -19,6 +19,7 @@ never by fixed offset.
 
     python tools/uitext.py dump 0048.bin
     python tools/uitext.py dump 0048.bin --json strings.json
+    python tools/uitext.py patchall out/ --preset battle_full   # all overlays, in place
     python tools/uitext.py patch 0048.bin 0004.bin out.bin out.font.bin --preset battle
 
 `patch` rewrites records in place. Unit counts are preserved exactly, so the
@@ -95,6 +96,115 @@ def patch_skill_table(d, glyphs, blob, slots, amap, log=print):
     return 1
 
 
+# Full battle sequence. "~~" = leave that unit untouched (runtime-filled).
+PRESETS["battle_full"] = {
+    # battle menu (3 units; units 0 and 2 of 特·技 are runtime-replaced)
+    "攻·擊": "Attack", "咒·文": "Spell", "特·技": "Skil ",
+    "道·具": "Item", "防·禦": "Defend", "撤·退": "Flee",
+    # spell selection screen
+    "火·系": "Fire  ", "風·系": "Wind  ", "冰·系": "Ice   ",
+    "光·系": "Light ", "雷·系": "Bolt  ",
+    "魔法說明：": "Spell info",
+    "回復系": "Heal  ", "爆裂系": "Blast ",
+    "頁數": "Page",
+    "魔法力": "MP ",
+    # spell / item sub-menus
+    "道具說明：": "Item info:",
+    "現在不可使用非回復系魔法": "Only healing magic now! ",
+    "魔法力不夠！": "Low MP!     ",
+    "體力不支，現在無法使用": "Too weak to use that! ",
+    "此物品不能使用。": "Can't use that! ",
+    "道具袋已滿。": "Bag is full!",
+    "重要物品，不可丟棄！！": "Key item - can't drop!",
+    "每種道具最多只能五個！！": "Only five of each item! ",
+    # combat results
+    "獲得經驗值": "EXP gained",
+    "獲得金·錢": "Gold found",
+    "獲得·····": "Got ~~~~~~~~~~",
+    "等級··升至··": "Lev.~~~~->  ~~~~",
+    "HP··升至··": "HP  ~~~~->  ~~~~",
+    "MP··升至··": "MP  ~~~~->  ~~~~",
+    "臂力··升至··": "Str ~~~~->  ~~~~",
+    "速度··升至··": "Spd ~~~~->  ~~~~",
+    "智慧··升至··": "Int ~~~~->  ~~~~",
+    "魔防··升至··": "MDef~~~~->  ~~~~",
+    "守備··升至··": "Def ~~~~->  ~~~~",
+    "技術··升至··": "Skil~~~~->  ~~~~",
+    "幸運··升至··": "Luck~~~~->  ~~~~",
+    # retreat
+    "___帶領全員撤退。。。": "~~~~~~ leads a retreat!",
+    "撤退成功": "Escaped!", "撤退失敗": "Blocked!",
+    # monster and party actions
+    "___·使用咒文·__": "~~~~~~ casts spell~~~~",
+    "___·使用道具": "~~~~~~ uses item",
+    "怪物脫逃。。。": "Monster flees!",
+    "怪物生命力增加。。。": "Monster HP rises... ",
+    "怪物防禦力增加。。。": "Monster DEF up...   ",
+    "怪物封住___魔法。。。": "Seal on ~~~~~~magic... ",
+    "怪物降低___命中率。。。": "Aim of  ~~~~~~lowered... ",
+    "怪物使用_擊必殺。。。": "Monster ~~ crit hit!!",
+    "怪物使用偷錢術": "Monster steals",
+    "怪物降低我方守備力。。。": "Party defense lowered!  ",
+    "___暫時麻痺。。。": "~~~~~~ is stunned!!",
+    "魔法失敗。。。。": "Spell failed... ",
+    "全體生命力回復": "Party healed! ",
+    "頭部": "Head",
+    # status panel
+    "臂力": "Str ", "速度": "Spd ", "智慧": "Int ", "魔防": "MDef",
+    "技術": "Skil", "守備": "Def ", "幸運": "Luck",
+    "攻擊力": "Attack", "防禦力": "Defend",
+    "身體狀況：": "Condition:", "次回": "Next", "全體金錢": "Gold:   ",
+    "姓名：": "Name: ", "年齡：": "Age:  ", "身高：": "Hght: ", "等級：": "Levl: ",
+    "武器：": "Weap: ", "身體：": "Body: ", "其它：": "Misc: ",
+    "頭部：······攻擊力": "Head: ~~~~~~~~~~~~Attack",
+    "防具：······防禦力": "Armor:~~~~~~~~~~~~Defend",
+    # field / system menus
+    "道具": "Item", "咒文": "Cast", "裝備": "Gear", "狀態": "Stat", "系統": "Sys ",
+    "戰鬥排列": "Line-up ", "基本狀態": "Status  ",
+    "存檔": "Save", "讀檔": "Load",
+    "對話速度": "Text Spd", "視窗速度": "Wind Spd", "遊戲速度": "Game Spd",
+    "音樂聲量": "Music Vl", "音效聲量": "SFX  Vol",
+    "現在不能存檔": "Cannot save!", "現在不能讀檔": "Cannot load!",
+    "抱歉，你的錢不夠。": "Sorry, too costly!",
+    "錢不夠，無法提供住宿！！": "Not enough gold to stay!",
+    # prompts
+    "好": "OK", "不好": "No  ", "是": "Y ", "不是": "No  ",
+    "休息": "Rest", "不休息": "Leave ", "使用": "Use ", "丟棄": "Drop",
+    "買": "Bu", "不買": "No  ", "賣": "Se",
+    "沒有道具": "No items",
+}
+
+
+def build_glyph_map(table, glyphs, blob, slots):
+    """Assign a font slot to every letter pair the preset needs, in SORTED order.
+
+    Allocation must not depend on the order records happen to be encountered:
+    the same pair has to land in the same slot in every overlay, or one font
+    cannot serve them all. Sorting the pair set makes the assignment a pure
+    function of the preset."""
+    import mkfont
+    pairs = set()
+    for eng in table.values():
+        t = eng
+        if len(t) % 2:
+            t += " "
+        for i in range(0, len(t), 2):
+            p = t[i:i + 2]
+            if p != "~~":
+                pairs.add(p)
+    pairs.add("Sk")
+    pairs.add("l ")
+    amap = {}
+    for p in sorted(pairs):
+        if not slots:
+            raise SystemExit("not enough free glyph slots for this preset")
+        amap[p] = slots.pop(0)
+    for p, slot in amap.items():
+        blob[1 + slot * 64:1 + (slot + 1) * 64] = \
+            mkfont.encode_cell(mkfont.compose(glyphs, p[0], p[1]))
+    return amap
+
+
 def load_charmap():
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     p = os.path.join(here, "data", "charmap.json")
@@ -118,8 +228,13 @@ def read_rec(d, i, cm):
     return c, u, i + 2 + 2 * c + 2
 
 
-def scan(d, cm, minlen=4):
-    """Return every chain of >=minlen contiguous records."""
+def scan(d, cm, minlen=1):
+    """Return every chain of >=minlen contiguous records.
+
+    minlen defaults to 1 because tables are not always contiguous: the spell
+    schools sit 12 bytes apart with a 2-byte gap, and the retreat messages form
+    a chain of only three. Requiring longer chains silently skipped both. Exact
+    text matching is what keeps patching safe, not the chain length."""
     out = []
     i = 0
     while i < len(d) - 6:
@@ -167,15 +282,25 @@ def cmd_dump(path, jsonout=None):
         print("\nwrote %s" % jsonout)
 
 
-def encode_english(s, nunits, glyphs, blob, slots, amap):
-    """Pack s into exactly nunits cells, two letters per cell."""
+def encode_english(s, orig, glyphs, blob, slots, amap):
+    """Pack s into exactly len(orig) cells, two letters per cell.
+
+    A "~~" pair means LEAVE THIS UNIT ALONE. Many strings carry slots the engine
+    fills at runtime - "·" units that receive numbers, "_" units that receive a
+    character name - and overwriting those breaks the message. Mark them "~~"
+    and the original unit is preserved."""
+    nunits = len(orig)
     need = nunits * 2
     if len(s) > need:
-        raise ValueError("%r needs %d cells, only %d available" % (s, (len(s) + 1) // 2, nunits))
+        raise ValueError("%r needs %d cells, only %d available"
+                         % (s, (len(s) + 1) // 2, nunits))
     s = s.ljust(need)
     out = []
     for i in range(0, need, 2):
         pair = s[i:i + 2]
+        if pair == "~~":
+            out.append(orig[i // 2])
+            continue
         if pair not in amap:
             if not slots:
                 raise ValueError("no free glyph slots left")
@@ -199,16 +324,16 @@ def cmd_patch(src, fontsrc, out, fontout, preset):
     glyphs = mkfont.latin_bitmaps()
     here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     slots = mkfont.free_slots(os.path.join(here, "data", "free_slots.txt"))
-    amap = {}
+    amap = build_glyph_map(table, glyphs, blob, slots)
     done = 0
-    for ch in scan(d, cm):
+    for ch in scan(d, cm, minlen=1):
         for off, u in ch:
             t = text_of(u, cm)
             if t not in table:
                 continue
             eng = table[t]
             try:
-                units = encode_english(eng, len(u), glyphs, blob, slots, amap)
+                units = encode_english(eng, u, glyphs, blob, slots, amap)
             except ValueError as e:
                 print("  skip %s: %s" % (t, e))
                 continue
@@ -219,13 +344,47 @@ def cmd_patch(src, fontsrc, out, fontout, preset):
             done += 1
     if "battle" in preset:
         done += patch_skill_table(d, glyphs, blob, slots, amap)
-    for pair, slot in amap.items():
-        blob[1 + slot * 64:1 + (slot + 1) * 64] = \
-            mkfont.encode_cell(mkfont.compose(glyphs, pair[0], pair[1]))
     open(out, "wb").write(bytes(d))
     open(fontout, "wb").write(bytes(blob))
     print("\n%d records rewritten, %d glyph cells repainted" % (done, len(amap)))
     print("wrote %s (%d bytes, unchanged) and %s" % (out, len(d), fontout))
+
+
+def cmd_patchall(outdir, preset):
+    """Patch every code-overlay chunk in a directory, in place.
+
+    The string tables are duplicated across ~90 overlays, so translating one is
+    not enough - the field and system menus appear in all of them, and battle
+    strings in five. Overlay chunks are identifiable by size: they are all
+    exactly 65535 bytes. Anything else in the directory is left alone."""
+    font_path = os.path.join(outdir, "0004.bin")
+    if not os.path.exists(font_path):
+        sys.exit("no 0004.bin (the font) in %s" % outdir)
+    names = sorted(n for n in os.listdir(outdir)
+                   if n.endswith(".bin") and n != "0004.bin"
+                   and os.path.getsize(os.path.join(outdir, n)) == 65535)
+    if not names:
+        sys.exit("no 65535-byte overlay chunks found in %s" % outdir)
+    print("%d overlay chunks to scan\n" % len(names))
+    total = touched = 0
+    for i, n in enumerate(names):
+        p = os.path.join(outdir, n)
+        before = open(p, "rb").read()
+        import io, contextlib
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            cmd_patch(p, font_path, p, font_path, preset)
+        out = buf.getvalue()
+        m = [l for l in out.splitlines() if "records rewritten" in l]
+        cnt = int(m[0].split()[0]) if m else 0
+        after = open(p, "rb").read()
+        assert len(before) == len(after), "%s changed size!" % n
+        if cnt:
+            touched += 1
+            total += cnt
+            print("  %-12s %3d records" % (n, cnt))
+    print("\n%d records rewritten across %d overlays" % (total, touched))
+    print("font written to %s" % font_path)
 
 
 def main():
@@ -237,6 +396,11 @@ def main():
         if "--json" in sys.argv:
             j = sys.argv[sys.argv.index("--json") + 1]
         cmd_dump(sys.argv[2], j)
+    elif sys.argv[1] == "patchall":
+        preset = "battle_full"
+        if "--preset" in sys.argv:
+            preset = sys.argv[sys.argv.index("--preset") + 1]
+        cmd_patchall(sys.argv[2], preset)
     elif sys.argv[1] == "patch":
         preset = "battle"
         if "--preset" in sys.argv:
