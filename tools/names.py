@@ -2,19 +2,28 @@
 """
 names.py - item, spell and monster names in archive entry 1098
 
-Entry 1098 is the game's data bank, not just the icon sheet documented in
-FORMATS.md. Alongside the icons at 0x4E20 and the portraits at 0xA108 it holds
-fixed-width name and description records:
+CORRECTED LAYOUT (2026-08-26). The previous constants (name 8 units at +0x42,
+description 14 units at +0x52) were wrong and produced the three-character
+truncation seen in dialogue.xlsx. Relative to the record bases this tool uses
+(FIRST = 0x145, STRIDE = 0x50) the real fields are:
 
-    record stride   0x50 (80 bytes)
-    +0x42           name field,        8 units, zero-padded
-    +0x52           description field, 14 units, full-width-space padded
-    remainder       binary stats
+    +0x4C   name field,        5 units, padded with 0x0000
+    +0x56   description field, 9 units, padded with 0x0066
+    +0x00   binary stats, 42 bytes (the tail of the PREVIOUS record's block)
 
-So a name may be up to 16 Latin characters and a description up to 28, at two
-letters per glyph cell - much more generous than the menu tables, whose labels
-are two or three cells.
+The old constants read the last three units of the name as an 8-unit window
+starting five units early, which is why every long name lost its tail into the
+description column (賢者之|杖受諸神保護的大賢者) and why spell rows picked up
+stat bytes as leading junk (功迅風咒, 藍書[2c1f]裝夢之咒).
 
+Budget: a name is 5 cells = 10 Latin characters, a description 9 cells = 18.
+NOT the 16 / 28 the old docstring claimed.
+
+0x0000 IS THE CHARACTER 一, not only padding. In the description field, where
+the pad is 0x0066, a 0x0000 must decode as 一 or descriptions read wrong:
+一人速度上升 became "人速度上升". Only the name field pads with 0x0000.
+
+    python tools/names.py layout 1098.bin      # empirical field probe
     python tools/names.py dump 1098.bin
     python tools/names.py dump 1098.bin --json names.json
     python tools/names.py patch 1098.bin 0004.bin names.json out.bin out.font.bin
@@ -22,9 +31,6 @@ are two or three cells.
 The JSON is a list of {offset, kind, chinese, english_name, english_desc}.
 Fill in the English fields and patch; blank fields are left untouched. Records
 are written in place, so entry 1098 never changes size.
-
-Padding is preserved: a translated name keeps the same 8-unit field, so the
-engine's column alignment is unaffected.
 """
 import json
 import os
@@ -34,10 +40,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 STRIDE = 0x50
-NAME_OFF, NAME_UNITS = 0x42, 8
-DESC_OFF, DESC_UNITS = 0x52, 14
+NAME_OFF, NAME_UNITS = 0x4C, 5
+DESC_OFF, DESC_UNITS = 0x56, 9
 FIRST = 0x145           # first record base
 ICONS = 0x4E20          # tables end where the icon sheet begins
+SPACE = 0x0066
 
 
 def load_charmap():
@@ -50,28 +57,68 @@ def units(d, o, n):
     return [struct.unpack_from("<H", d, o + 2 * k)[0] for k in range(n)]
 
 
-def text(u, cm):
-    return "".join("" if v in (0, 0x66) else cm.get(v, "[%03x]" % v) for v in u)
+def text(u, cm, zero_is_pad):
+    """Decode a field. zero_is_pad only for the name field, whose pad is 0x0000.
+    In the description field 0x0000 is the character 一."""
+    out = []
+    for v in u:
+        if v == SPACE:
+            continue
+        if v == 0 and zero_is_pad:
+            continue
+        out.append(cm.get(v, "[%03x]" % v))
+    return "".join(out)
 
 
 def records(d, cm):
     """Yield (offset, name, description) for every populated record."""
     o = FIRST
-    while o + STRIDE <= ICONS:
-        nm = text(units(d, o + NAME_OFF, NAME_UNITS), cm)
-        ds = text(units(d, o + DESC_OFF, DESC_UNITS), cm)
+    while o + DESC_OFF + 2 * DESC_UNITS <= ICONS:
+        nm = text(units(d, o + NAME_OFF, NAME_UNITS), cm, True)
+        ds = text(units(d, o + DESC_OFF, DESC_UNITS), cm, False)
         if nm or ds:
             yield o, nm, ds
         o += STRIDE
 
 
 def classify(off, name, desc):
-    """Rough section label. Boundaries are positional, so this is advisory."""
-    if off >= 0x8000:
-        return "monster"
-    if off >= 0x4500:
+    """Rough section label. Boundaries are positional, so this is advisory.
+    Spells begin at 0x3E35, not 0x4500 as FORMATS.md says. No monster records
+    exist below the icon sheet at 0x4E20 - the monster table has NOT been found."""
+    if off >= 0x3E35:
         return "spell"
     return "item"
+
+
+def cmd_layout(path):
+    """Empirical field probe: for every u16 column in the stride, how often is
+    it a mapped glyph, 0x0000, 0x0066 or binary? Text fields stand out as runs
+    of high glyph density with a ragged pad tail; stats do not."""
+    cm = load_charmap()
+    d = open(path, "rb").read()
+    cols = STRIDE // 2
+    bases = list(range(FIRST, ICONS - STRIDE, STRIDE))
+    print("col  off   glyph  zero  space  other   sample")
+    for c in range(cols):
+        g = z = s = o = 0
+        sample = []
+        for b in bases:
+            v = struct.unpack_from("<H", d, b + 2 * c)[0]
+            if v == 0:
+                z += 1
+            elif v == SPACE:
+                s += 1
+            elif v in cm:
+                g += 1
+                if len(sample) < 8:
+                    sample.append(cm[v])
+            else:
+                o += 1
+        print("%3d  +%02X   %5d %5d  %5d  %5d   %s"
+              % (c, 2 * c, g, z, s, o, "".join(sample)))
+    print("\n%d record slots probed. Expect the name field at +%02X (%d units) "
+          "and the description at +%02X (%d units)."
+          % (len(bases), NAME_OFF, NAME_UNITS, DESC_OFF, DESC_UNITS))
 
 
 def cmd_dump(path, jsonout=None):
@@ -82,8 +129,9 @@ def cmd_dump(path, jsonout=None):
         rows.append({"offset": "0x%05X" % off, "kind": classify(off, nm, ds),
                      "chinese": nm, "chinese_desc": ds,
                      "english_name": "", "english_desc": ""})
-        print("0x%05X  %-8s %-16s  %s" % (off, classify(off, nm, ds), nm, ds))
-    print("\n%d records (name <=16 chars, description <=28)" % len(rows))
+        print("0x%05X  %-6s %-10s  %s" % (off, classify(off, nm, ds), nm, ds))
+    print("\n%d records (name <=%d chars, description <=%d)"
+          % (len(rows), NAME_UNITS * 2, DESC_UNITS * 2))
     if jsonout:
         json.dump(rows, open(jsonout, "w", encoding="utf-8"),
                   ensure_ascii=False, indent=1)
@@ -92,7 +140,6 @@ def cmd_dump(path, jsonout=None):
 
 def cmd_patch(src, fontsrc, jsonin, out, fontout):
     import mkfont
-    cm = load_charmap()
     d = bytearray(open(src, "rb").read())
     blob = bytearray(open(fontsrc, "rb").read())
     rows = json.load(open(jsonin, encoding="utf-8"))
@@ -143,7 +190,9 @@ def main():
     if len(sys.argv) < 3:
         print(__doc__)
         return 1
-    if sys.argv[1] == "dump":
+    if sys.argv[1] == "layout":
+        cmd_layout(sys.argv[2])
+    elif sys.argv[1] == "dump":
         j = sys.argv[sys.argv.index("--json") + 1] if "--json" in sys.argv else None
         cmd_dump(sys.argv[2], j)
     elif sys.argv[1] == "patch":
