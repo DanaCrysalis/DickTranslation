@@ -70,3 +70,57 @@ bevel layer alone recovers the exact 16×16 bitmap, which is what made pixel-lev
 adjudication possible. A Noto-CJK template matcher over all 13,452 Big5 characters
 was too weak to drive transcription (~20% top-1) but reliable at radical level, and
 useful as a tiebreaker — it was what confirmed 竹 for 笨.
+
+---
+
+# Resolution (after the full dialogue translation)
+
+## Your finding 2 was right, and later docs overruled it wrongly
+
+This file said duplicate glyphs are real and duplicate-detection has false
+positives. `STATUS.md` and `CONTINUING.md` later asserted the opposite. **This file
+was right.** `0x2f9` and `0x660` are both 鱗 and both correct — `0x2f9` is item-table
+vocabulary (龍鱗甲, 龍鱗盾, neighbours 冑 護 盾 腕) with zero dialogue uses, `0x660`
+has one dialogue use and no item uses. Allocation did not deduplicate across corpora.
+
+The specific pair cited here, `0x353`/`0x524`, is currently mapped 越/愈 and is worth
+re-rendering in that light. Same for `0x55A` 鑲, `0x5EA` 筋, `0x66D` 脊.
+
+## Your finding 3 became the main working method
+
+Context decoding did indeed beat duplicate detection. Translating the whole script
+sharpened it into two tests, now in `CONTINUING.md`: the **zero-good-use test**
+(does the index read correctly *anywhere* else?) and the **bigram profile** (list
+every bigram the glyph takes part in; is any of them a real word?). Together they
+found 18 more wrong readings. `data/glyph_bigram_audit.csv` carries the profile.
+
+## The 0x123 correction here is wrong
+
+> **0x123 is 閒, not 間** — 0x4EE is the real 間
+
+Both halves are wrong. `0x123` is 間 (突然間, 房間, 一段時間, 之間) and `0x4EE` is
+食 (飲食). `STATUS.md` carried the same error.
+
+## The 13 left unmapped — all now have readings
+
+| index | then | now | how |
+|---|---|---|---|
+| `0x54E` | 「X錫尼」 | 鎂 | correct — the retail script spells the continent both 美錫尼 (15) and 鎂錫尼 (4) |
+| `0x584` | 剿/剷 | 剷 | correct — 山賊已經被剷除 |
+| `0x58B` | 駐/把/看 | **仍** | none of the three: 駐, 把, 看 are all occupied. Not a 守-compound — 還有一個山賊仍守在門口. Rendered |
+| `0x5C5` | 遷/還 | 遷 | correct — 早點遷回隆恩內爾皇城 |
+| `0x660` | 金-radical, 鑽 taken | **鱗** | 魚 radical, not 金 — 撿到金色的鱗片. Rendered |
+| `0x505` | 一臉X喪 | 垂 | **still open.** 沮 is occupied; 頹 and 懊 are absent and fit; 垂 may be right as a contraction of 垂頭喪氣. No translation impact |
+| `0x556` | unused | 睞 | **correct after all** — zero *dialogue* uses, but two item descriptions: 受女士青睞, 武鬥家青睞的硬水晶 |
+| `0x559` | unused | 蠶 | **correct after all** — 輕薄的蠶絲製成的長衣 |
+| `0x5B2` | single use | 龐 | correct — 龐德隆利山, 8 uses |
+| `0x5E3` | 老闆：X！真煩 | 噴 | **still open**, and does not need solving. Both uses are a snort of contempt; any dismissive English reading is correct |
+| `0x5FF` | (attributed here) | 吼 | correct — 聽到吼叫聲. The 老闆：X！真煩 context actually belongs to `0x5E3` |
+| `0x643` | 卡X, a name | 席 | correct — 卡席, General of Sal in entry 794 |
+| `0x658` | single use | 攏 | **retail typo, not a map error** — 攏爾 for 撒爾 at e794 m26. Provable: m90 is the same speech and spells it 撒爾 |
+
+## One more note on 0x556 and 0x559
+
+They were filed as unverifiable on the strength of zero dialogue uses. That was a
+method error: the dialogue is one corpus, the item / spell / monster and UI tables
+are another. Check both before calling a glyph uncheckable.

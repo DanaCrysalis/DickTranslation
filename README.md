@@ -8,11 +8,19 @@ which is why ordinary text-extraction tools find nothing in its 87 MB archive. T
 repository documents the formats, provides tools to extract and reinsert the script,
 and contains the recovered index-to-character map.
 
-**Status: research complete.** 1,064 dialogue messages (~39,500 characters) can be
-dumped and patched back, at **changed lengths** — the offset table can be rebuilt and
-the archive repacked, verified in-game. The character map is **100% complete by text
-volume** - every glyph index the dialogue uses is identified. The glyph font has been located and decoded, so glyphs can be read directly
-and repainted. Nothing about an English patch is blocked on format work any more.
+**Status: research complete, dialogue translated.** 1,064 dialogue messages
+(~39,500 characters) can be dumped and patched back, at **changed lengths** — the
+offset table can be rebuilt and the archive repacked, verified in-game. The
+character map is **100% complete by text volume** - every glyph index the dialogue
+uses is identified. The glyph font has been located and decoded, so glyphs can be
+read directly and repainted.
+
+**All 1,064 messages are now translated into English**, with a glossary and an
+issues log, in `dialogue.xlsx`. Growth came out at **1.41×**, under the 1.5×
+estimate, and **no message needed splitting**. See `docs/TRANSLATION.md`.
+
+Still outstanding for a shippable patch: the item / spell / monster names, the UI
+strings, the digraph font and the line-setter.
 
 ---
 
@@ -119,9 +127,16 @@ That's why 狄/克 are `0x5d`/`0x5e` and 知/道 are `0x62`/`0x63` — pairs typ
 got consecutive slots. Frequent characters cluster low: 的 at `0x11`, punctuation
 ，。：！？ at `0x16`–`0x1a`.
 
-Allocation was not deduplicated: some characters own **two** slots. `0x353` and
-`0x524` are both 越 and both used in overlapping chapters. Treat a duplicate as
-evidence to check, not proof of error.
+Allocation was not deduplicated **across corpora**, so a character can own two
+slots. Confirmed case: `0x2f9` and `0x660` are both 鱗. `0x2f9` has zero dialogue
+uses and appears only in item names (龍鱗甲, 龍鱗盾), with neighbours 冑 護 盾 腕 —
+it was allocated inside the armour-name block. `0x660` has one dialogue use and no
+item uses. Two slots, two corpora.
+
+This settles a disagreement between these docs: `STATUS.md` and `CONTINUING.md`
+previously asserted the font contains no duplicates at all, and were wrong.
+Occupancy is decisive only *within* a corpus. Treat a duplicate as evidence to
+check, not proof of error — but do check which corpus each slot serves.
 
 ### UI, menu and battle strings
 
@@ -181,11 +196,19 @@ data/
   unmapped.txt    indices the script uses that are not yet identified
   free_slots.txt  slots the script never references — repaintable for Latin
   loadmap.txt     which archive entries each code overlay loads, and where
+  glyph_bigram_audit.csv
+                  every bigram each low-frequency glyph takes part in, for
+                  auditing readings that context alone cannot reach
 docs/
   FORMATS.md      byte-level format reference
   CONTINUING.md   how to extend and verify the character map
   STATUS.md       what is done, what is not, and known weaknesses
+  TRANSLATION.md  the English: conventions, constraints, what is left
+  PASS_NOTES.md   results of the 0x4B0–0x6A0 mapping passes
 ```
+
+`dialogue.xlsx` carries the script (`Dialogue`), the English (column J), the
+terminology (`Glossary`) and the defect log (`Issues`).
 
 Game data is **not** committed — see `.gitignore`. Extract it from your own copy.
 
@@ -201,8 +224,12 @@ decoded, `font.py` renders any slot directly.
 Readings are verified by **decoding the script and checking it reads as Chinese**.
 This is the only check that catches a wrong reading of a character that collides with
 nothing, and it found 46 such errors in a single pass. Duplicate and mismatch
-detection remain useful but are secondary, and duplicates now carry false positives
-because the font itself contains duplicate characters.
+detection remain useful but are secondary.
+
+Translating the script found **18 more** wrong readings, using two sharper forms of
+the same idea — the zero-good-use test and the bigram profile. Both are documented
+in `docs/CONTINUING.md`; `data/glyph_bigram_audit.csv` carries the profile for every
+glyph used 20 times or fewer, which is where the remaining risk lives.
 
 Note that a glyph's **bitmap** and its **character reading** are independent
 artifacts. The map can be wrong about what a glyph means while the bitmap is exactly

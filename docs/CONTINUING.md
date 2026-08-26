@@ -60,6 +60,44 @@ Three traps, each of which cost a test cycle:
    to preserve them, and start such strings with a space or the name will run
    straight into the text.
 
+## The zero-good-use test
+
+The sharpest check available, and the one that separates a **map error** from a
+**retail typo**. Take the suspect glyph's *index* and look at every other place it
+appears:
+
+- A retail typo is a correct glyph used in one wrong place, so the index reads
+  correctly everywhere else. 太 has 114 good uses and one 太家. 遭 has 9 good and two
+  遭糕. 的 has 1,249 good and one 使的.
+- A misread glyph reads wrongly **everywhere**, because the reading itself is wrong.
+
+Applied to 38 suspicious decodes found while translating, 27 passed and 11 failed.
+Every one of the failures was confirmed by render. Corroborate with two things:
+whether the proposed correct character is absent from the whole map (see the
+occupancy test below), and whether adjacent slots come from the same phrase — slots
+were allocated in order of first use, so `0x1bb`=豈 `0x1bc`=更 `0x1bd`=糟 is
+豈不是更糟 typed in one go.
+
+## The bigram profile
+
+The zero-good-use test fails if you test the wrong bigrams. `0x2a6` passed an early
+pass with "40 good uses" because only 亙浪 and 亙大 were checked as suspect and
+亙樹/亙弓/亙繩 were assumed good. All six of its bigrams were wrong: it is **巨**,
+44 uses, and 巨樹/巨弓/巨繩 are the central nouns of chapter 4.
+
+So don't hand-pick suspect bigrams. **List every two-character sequence the glyph
+takes part in and ask whether any of them is a real word.**
+`data/glyph_bigram_audit.csv` carries this for every glyph used 20 times or fewer —
+1,167 of them, which is where essentially all the remaining risk lives.
+
+## Check every corpus, not just the dialogue
+
+`0x556` and `0x559` were once filed as "zero uses, can never be checked". Both were
+wrong: they have zero *dialogue* uses but appear in item descriptions, where both
+readings check out (青睞 "favour", 蠶絲 "silk"). The dialogue is 1,064 messages; the
+item, spell, monster and UI tables are a separate corpus and the tests above must
+cover them too.
+
 ## Duplicate and mismatch checks
 
 Merge new readings against `data/charmap.json` and look for:
@@ -68,16 +106,30 @@ Merge new readings against `data/charmap.json` and look for:
    readings is wrong.
 2. **Duplicates** — two indices mapped to the same character.
 
-**Duplicates are conclusive.** The font holds 1695 distinct bitmaps in 1695
-non-blank slots — there are no duplicate glyphs anywhere. So if two indices map to
-the same character, one reading is definitely wrong. Render both and compare:
+**Duplicates are NOT conclusive, and this file previously said they were.**
+A confirmed duplicate exists: `0x2f9` and `0x660` are both 鱗, both correct.
+`0x2f9` has zero dialogue uses and appears only in item names (龍鱗甲, 龍鱗盾),
+with neighbours 冑 護 盾 腕 — allocated inside the armour-name block. `0x660` has one
+dialogue use and no item uses. **Allocation did not deduplicate across corpora.**
 
-```bash
-python tools/font.py export out/0004.bin glyphs/
-```
+So a duplicate is evidence to check, not proof of error. Ask which corpus each slot
+serves: if both are dialogue-resident, one reading is almost certainly wrong; if they
+sit in different corpora, both may be right.
 
-An earlier revision of this document claimed the opposite, on the strength of
-`0x353`/`0x524` both reading as 越. They are 越 and 愈.
+This does not weaken the *occupancy test*, which is the most useful consequence of
+allocation-on-first-use:
+
+> The font holds exactly the characters the writers typed. So "character X is absent
+> from the 1,686-entry map" means "X appears nowhere in the game" — which makes a
+> proposed reading being absent *consistent*, and a reading already held by another
+> dialogue slot *impossible*.
+
+That is what settled `0x1bd` (the render read 相, but 相 is `0x51` with 34 dialogue
+uses) and `0x41f` (the render read 書, but 書 is `0x102` with 7 dialogue uses).
+
+`0x353`/`0x524` are recorded here as 越 and 愈. Given duplicates are now known to be
+real, that pair is worth re-rendering — the original claim in `PASS_NOTES.md` may
+have been right.
 
 ## Bitmaps and readings are separate things
 
@@ -92,9 +144,15 @@ checking the map, use decoded sentences.
 ## The game's own mistakes
 
 Not every strange decode is a map error. The retail script contains 氾瀾 for 氾濫,
-廣閣 for 廣闊, and 整遍 for 整片. Confirm against the rendered glyph before
-"correcting" a reading — and flag them for the translator rather than silently
-normalising.
+廣閣 for 廣闊, and 整遍 for 整片, and roughly seventy more found while translating —
+all logged in the `Issues` sheet of `dialogue.xlsx`. Confirm against the rendered
+glyph before "correcting" a reading, and flag them for the translator rather than
+silently normalising.
+
+**But do not reach for "retail typo" on sight.** Of 38 odd decodes met while
+translating, 11 were the map's fault, not the writers'. Run the zero-good-use test
+above first — a script that never once uses 費, 價, 蠻, 糟 or 漠 is not a script with
+charming typos, it is a map with five wrong readings.
 
 ## Reading a glyphdump pass (legacy method)
 
@@ -138,8 +196,14 @@ so long.
 Every glyph index the dialogue uses is now identified. The last 65 were resolved
 by rendering them straight out of the font and reading them - no dumping, no
 context inference. Among them were the three highest-frequency unknowns,
-`0x286`/`0x287`/`0x288`, which turned out to be the name 艾沙娜; they had never
-appeared in a glyphdump pass because those slots sit below 0x4B0.
+`0x286`/`0x287`/`0x288`; they had never appeared in a glyphdump pass because those
+slots sit below 0x4B0.
+
+**An earlier revision of this file called those three "the name 艾沙娜". They are
+not a name.** They are three ordinary characters — 艾, 沙, 娜 — and the string 艾沙娜
+occurs **zero** times in the script. The apparent frequency was 艾 alone (113 uses).
+What they actually spell is three separate characters: 艾薩克 Isaac (53), 娜迪亞
+Nadia (51) and 沙卡修 Sakashu (32). Decode before naming.
 
 If a new unknown appears (menus and item tables use vocabulary the dialogue does
 not), read it the same way:

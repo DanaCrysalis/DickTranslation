@@ -76,6 +76,26 @@ The two-bit value is a palette role, expanded into the staging buffer as a byte:
 
 Role 3 does not occur in any of the 2048 retail glyphs. Avoid it when repainting.
 
+### Latin glyphs already present
+
+The font carries Latin in two sets, which matters when adjudicating a doubtful
+reading — "it looks like a letter" is a live hypothesis, not a stretch.
+
+| set | slots | dialogue uses |
+|---|---|---|
+| halfwidth `D O S` | `0x143`–`0x145` (contiguous — "DOS") | 0 |
+| halfwidth `M P H` | `0x1d7`–`0x1d9` (MP / HP) | 0 |
+| halfwidth `X` | `0x263` | 0 |
+| fullwidth `Ａ Ｂ Ｃ` | `0x55b`, `0x55d`, `0x57b` | 6 / 6 / 4 — NPC labels 商人Ａ, 村人Ｂ, 村人Ｃ |
+| fullwidth `Ｚ` | `0x17a` | 2 — the sleeping sound effect at e23 m47 |
+
+Also present: halfwidth digits `0`–`5`, fullwidth `８ ９`, `/ + %`, a fullwidth
+hyphen and a box-drawing dash.
+
+`0x17a` sits one pixel lower than Ａ Ｂ Ｃ. It was allocated in entry 23 while the
+letters were allocated in entry 390, so it was drawn first, in a different pass, and
+never quite matched the later baseline.
+
 ### Slot inventory
 
 | | |
@@ -167,6 +187,12 @@ Two kinds of unit are written by the engine while drawing and must be preserved:
 `等級··升至··` renders as `等級 12 升至 13`. Overwriting the `·` units breaks the
 substitution, so a translation must leave them alone.
 
+**This also happens in dialogue**, in exactly one place. `e390 m2` reads
+`商人Ａ：...我出價　　　元！！` — three `0x0066` cells between 價 and 元 receive the
+merchant's offer price at draw time. A sweep of all five script entries found no
+other case; the other 17 mid-sentence gaps are layout spacing. Note that `0x0000` is
+**not** a placeholder inside dialogue: there it is the character 一.
+
 ### Templates rewritten at runtime
 
 The battle menu's third option is a template. The stored record is `特·技`, but
@@ -214,6 +240,14 @@ entry.
 
 Field widths translate to **16 Latin characters for a name and 28 for a
 description** at two letters per cell - far more generous than the menu tables.
+
+**Unverified, and it matters.** The name column in `dialogue.xlsx` truncates at
+*three* characters, with the fourth spilling into the description:
+`賢者之|杖受諸神保護的大賢者`, `聖十字|杖能化日月星晨為力量`, `引導之|燈？？！！`.
+An 8-unit field would hold all four. Either that sheet was generated with a narrower
+field or the offset above is wrong — and it is the difference between a 16-character
+and an 8-character name budget. Settle it with `names.py dump` against a clean entry
+1098 before writing any item English.
 
 `tools/names.py` dumps these to JSON, and patches translations back in place.
 
@@ -274,10 +308,24 @@ Indices observed in clean messages run from `0x0000` to `0x069B`.
 The renderer word-wraps at **12 units per line, 3 lines per box**. Messages contain
 no explicit line or box breaks — an 84-unit message renders as three boxes.
 
+**Every clean message's unit count is a multiple of 12** — all 1,064 of them.
+Messages are padded to whole lines with `0x0066`.
+
+**Speaker turns start on a fresh line.** Within a message, a new speaker generally
+begins at a 12-unit boundary, padded out to reach it: 399 of ~464 internal turn
+breaks land exactly on one. The rest pack two short turns onto a shared line, which
+the retail script does when space is tight. Turns cross *box* boundaries freely — the
+alignment is to the line, not the box.
+
+A one-character speaker name is padded to two cells with a leading `0x0066`
+(`　琳：`), which is why some turn starts sit one unit past a boundary.
+
 ### Container limits
 
-The unit count is a **u8**, so 255 units is a hard ceiling per message. The longest
-retail message is 252 units — 99% of the way there. Message offsets are u16 and
+The unit count is a **u8**, so 255 units is the raw ceiling — but because messages
+are padded to whole 12-unit lines, the **effective ceiling is 252 units** (21 lines,
+504 Latin characters at two per cell). The longest retail message is exactly 252,
+which is the ceiling rather than a near miss. Message offsets are u16 and
 memory-relative, so an entry's payload cannot exceed 64 KB; the largest is entry 23
 at 29,874 bytes.
 
