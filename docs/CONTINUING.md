@@ -100,6 +100,35 @@ Read the sentence, not the glyph. And read it in **every** corpus — the three
 most recent corrections (`0x2cb` 屠, `0x2e8` 燄, `0x5ea` 節) all came out of the
 item table, which has no dialogue uses at all.
 
+### Make every edit assert that it matched
+
+A find-and-replace that silently does nothing is the most expensive kind of
+mistake in this repository, because the file still looks edited. A stale line
+survived a full documentation pass this way — the README went on claiming the item
+names and the line-setter were outstanding after both were finished, because the
+text being replaced had been reworded upstream and the replacement quietly no-op'd.
+Assert on the match, or diff afterwards.
+
+### Patching is a separate discipline from decoding
+
+Reading the data right does not mean writing it back right. The reinsertion pass
+broke the game five times, and not once because a translation was wrong:
+
+- **Write back the same entry length.** Entry sizes are allocations, not
+  measurements. See FORMATS.md.
+- **Never write on a byte match alone.** Require the record header. Content
+  matching without it puts English inside longer strings and inside code.
+- **Verify from the other side.** A field-by-field decode check cannot see a write
+  that landed where it was never aimed, which is exactly the failure that hangs the
+  game. `tools/verify_patch.py` diffs the packed archive against a clean one and
+  reports which entries changed and by how much; anything outside the expected list
+  is a bug.
+- **Compare file sizes first.** One command found the cause of a crash that four
+  rounds of reasoning had missed.
+- **Bisect rather than theorise.** `patch_all.py` has `--skip-ui`, `--skip-tables`
+  and `--entries` for exactly this. Four builds isolated a crash that five guesses
+  had not.
+
 ## UI strings are a separate job from dialogue
 
 Menus, battle messages and status labels live in the code overlays, not in a
@@ -197,7 +226,7 @@ This does not weaken the *occupancy test*, which is the most useful consequence 
 allocation-on-first-use:
 
 > The font holds exactly the characters the writers typed. So "character X is absent
-> from the 1,686-entry map" means "X appears nowhere in the game" — which makes a
+> from the 1,688-entry map" means "X appears nowhere in the game" — which makes a
 > proposed reading being absent *consistent*, and a reading already held by another
 > dialogue slot *impossible*.
 

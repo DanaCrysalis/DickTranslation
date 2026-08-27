@@ -124,3 +124,26 @@ Both halves are wrong. `0x123` is 間 (突然間, 房間, 一段時間, 之間) 
 They were filed as unverifiable on the strength of zero dialogue uses. That was a
 method error: the dialogue is one corpus, the item / spell / monster and UI tables
 are another. Check both before calling a glyph uncheckable.
+
+
+---
+
+## Later corrections to this file
+
+Three more map errors were found after this pass, all in the ITEM corpus, which
+this pass could not see — it only ever read the dialogue.
+
+| slot | this file / charmap said | is |
+|---|---|---|
+| `0x2cb` | 屑 | **屠** — 屠龍劍, 屠龍槍, 勇者屠龍時所用 |
+| `0x2e8` | 餞 | **燄** — 火燄頭盔 |
+| `0x5ea` | 箭 / 筋 | **節** — duplicates `0x5be`, zero uses in any dumped corpus |
+| `0x28c` | *(unmapped)* | **狂** — 狂亂擊, 狂猛擊 |
+| `0x317` | *(unmapped)* | **X** — a Latin letter. X字斬 is named with the letter |
+
+`0x317` is worth dwelling on. The bigrams said 十字斬, 十 is a real word, and the
+reading was obvious — and wrong. It is a duplicate of `0x0263` X, the third
+cross-corpus duplicate found in this project. Render before believing a reading,
+however plausible the context makes it.
+
+The map is now 1,688 entries.

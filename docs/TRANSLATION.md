@@ -26,7 +26,7 @@ binding constraint it was expected to be — see "The real ceiling" below.
 | `Dialogue` | column J is the English, one line per speaker block |
 | `Glossary` | ~170 terms: people, places, items, spells, plus the naming rules |
 | `Issues` | ~180 rows: map corrections, retail typos, open questions, tooling risks |
-| `Item-Spell-Monster` | 235 records, all translated |
+| `Item-Spell-Monster` | 317 records across three tables, all translated |
 | `UI strings` | all five battle overlays, not just entry 48 |
 
 `Glossary` is terminology only. Anything that is a *defect* — a bad glyph
@@ -168,9 +168,10 @@ Translated in file order; read in narrative order.
 新科技軸心, sitting at the end of the script entry. Translated literally. It may
 be better left in Chinese or repurposed as a patch credit.
 
-## The item and spell table
+## The item, skill and plot tables
 
-All 235 records are translated. The field budget is **10 Latin characters for a
+All 317 records are translated: 239 items and spells, 49 special attacks and
+summons, 29 plot items. The field budget is **10 Latin characters for a
 name and 24 for a description** — 5 and 12 cells at two letters each, verified
 with `names.py layout` after the documented offsets turned out to be wrong.
 
@@ -221,20 +222,50 @@ blur through this route.
 variants of one ultimate. Translated identically — nothing in the data
 distinguishes them and inventing a difference would be inventing content.
 
+## Shortened on screen
+
+A field is n units and cannot grow, so some English is shorter in the game than in
+the dialogue. The dialogue always keeps the full form.
+
+| full | on screen | why |
+|---|---|---|
+| Darrell | `Darrel` | 3-unit name field, 6 characters |
+| Sakashu | `Sakash` | same |
+| Holy Cross Staff | `Holy Cross` | 5-unit item name, 10 characters |
+| Lamp of Guidance | `Guide Lamp` | same |
+| Wings of the Desert | `DesertWing` | same |
+| Gale Tornado Slash | `Tornado` | 5-unit skill name |
+| Buy / Sell | `Bu` / `Se` | **one-unit** shop options, 2 characters |
+
+The last row is not a compromise, it is the limit: one unit is one glyph cell and
+a cell holds two Latin letters. `不買` is two units and can hold `Back`.
+
+## Slot names
+
+Confirmed in play, and the first attempt got two of them wrong:
+
+| Chinese | English | note |
+|---|---|---|
+| 頭部 | Head | |
+| 武器 | Weap | |
+| 防具 | **Guard** | the OFFHAND slot — shields and bracers, not body armour |
+| 身體 | Body | body armour |
+| 其它 | Misc | |
+
+`防具` was originally "Armor", which named the wrong slot *and* collided with the
+Body row.
+
 ## What is left
 
-1. **UI strings.** ~125 rows still `todo` in the sheet, plus the destination
-   table's exact field widths, which need `tblprobe.py` over `0x9390`-`0x9760`.
-2. ~~The character-name table~~ — found and translated. Entry 48, 6-byte grid
-   based at `0x14C7`, nine names: Darrel, Dick, Isaac, Lin, Fran, Noron, Nadia,
-   Ronto, Sakash. Three cells is six Latin characters, which shortens Darrell and
-   Sakashu on screen; the dialogue keeps both in full. The **battle HP/MP plate**
-   is still unfound and is now the only located-nothing item left.
-3. **The 0x39-stride table** after the destination list in every battle overlay,
-   and whatever bare array holds the 76 orphan glyphs.
+1. **The 16-byte image descriptor table**, for the title-screen graphics
+   (開始新遊戲 / 繼續舊冒險) — the only in-game text with no route to English.
+2. **Entries 190, 208, 367, 831, 881, 893, 933**, which decode as junk under the
+   script parser. One is likely the new-game text crawl.
+3. **無裝備 and the equipment dash filler**, written from code or an entry not yet
+   scanned.
 4. **The eleven over-read messages** — e23 m196, e249 m17/m99, e625 m197/m216,
-   e794 m10/m16/m18/m24/m25/m94. (An earlier revision of this file called them
-   "the eight"; the list has always had eleven entries, and the sheet flags 44
-   over-read messages in total, of which these are the ones called out
-   individually.)
-5. **The digraph font and the line-setter**, per STATUS.md.
+   e794 m10/m16/m18/m24/m25/m94. (An earlier revision called them "the eight"; the
+   list has always had eleven, and the sheet flags 44 over-read messages in total,
+   of which these are the ones called out individually.)
+5. **The 15 destination names** recovered from run-together records, whose offsets
+   are still estimated.

@@ -30,70 +30,74 @@
 - **The dialogue translation.** All 1,064 clean messages are in English in column J
   of `dialogue.xlsx`, with a `Glossary` sheet (~170 terms) and an `Issues` sheet
   (~180 rows). Growth 48,108 → 67,728 units, **1.41×**. See `docs/TRANSLATION.md`.
-- **The item and spell table.** Entry 1098's field layout is settled and verified
-  by probe (name +0x4C, 5 units; description +0x5C, 12 units), and **all 235
-  records are translated** in the `Item-Spell-Monster` sheet. Budget is 10 Latin
+- **All the fixed-width text.** Entry 1098's three tables are settled and
+  verified against retail bytes: 239 items and spells, 49 special attacks and
+  summons, 29 plot items — **317 records, all translated**. There is no
+  monster-name table; see FORMATS.md. The `Item-Spell-Monster` sheet is misnamed
+  for historical reasons. Budget is 10 Latin
   characters for a name and 24 for a description.
 - **All five battle overlays are dumped**, not just entry 48. The four new ones
-  carry the per-chapter world-map destination table, and nothing else that 48
-  lacks.
-
-## Numbers
-
-| | |
-|---|---|
-| messages extracted | 1,064 clean (of 1,108 parsed; 44 over-read) |
-| characters of dialogue | ~39,500 |
-| distinct glyph indices used | 1,508 |
-| characters mapped | 1,686 |
-| coverage by text volume | 100% |
-| highest index used by script | `0x069B` |
-| font slots | 2,048 (353 blank) |
-| slots the script never references | 540 |
-| messages translated | 1,064 of 1,064 |
-| English units | 67,728 (1.41× the source) |
-| charmap corrections made while translating | 18 |
+  carry the per-chapter world-map destination table.
+- **The UI.** Entry 48 is complete — every row either translated or shown not to
+  be text — and the strings are written into every overlay copy by content match.
+- **The character-name table**, at entry 48 `0x14C7`: Darrel, Dick, Isaac, Lin,
+  Fran, Noron, Nadia, Ronto, Sakash.
+- **The battle HP/MP plate**, at entry 48 `0x1509`–`0x154B`: five 3-unit party
+  name slots at x=95, an `HP··MP` header at x=190 y=68, and a separator.
+- **Reinsertion.** `tools/patch_all.py` builds a playable English archive —
+  dialogue, both entry-1098 tables, the UI and the font in one allocation pass.
+  See the reinsertion section of `docs/FORMATS.md`.
 
 ## Not solved
 
 - **Menu and title artwork.** The title screen options (開始新遊戲 / 繼續舊冒險)
   are images, proven by the font not being resident in memory at the title. The
   image codec is understood but the 16-byte descriptor table that carries
-  dimensions has not been found, so images cannot yet be re-encoded.
-- ~~**Item, spell and monster names.**~~ Done — 235 of 235, see Solved above.
-- ~~**Monster names: the game appears not to have any.**~~ **Wrong, twice.** A
-  screenshot of the status screen showed 犬爪獸, and searching for its bytes found
-  it at `0x081C1` — inside entry 1098, above the `0x4E20` limit that `names.py`
-  had always stopped at. Two tables live up there: 49 special-attack and summon
-  names at `0x07F21` and 29 plot items at `0x08F89`, all now translated. The
-  `~0x8000` figure this repository had recorded from the start was correct, and
-  the scan limit was what hid it. **The 76 orphan glyphs are explained too** —
-  鳳凰 in 鳳凰魔法, 犬 in 犬爪獸, 隕 in 慧星隕石, 砲 in 鬥氣砲, 旋 in 迴旋斬, 煌
-  in 星舞烈煌槍, 虎 in 虎之牙, 翡翠 in 翡翠手鐲. The reasoning below is kept
-  because the *argument* was sound and the *premise* was not: it is true that
-  every battle message calls the enemy generically 怪物 — 怪物脫逃, 怪物生命力增加,
-  怪物防禦力增加, 怪物封住___魔法, 怪物使用一擊必殺, 怪物使用偷錢術,
-  怪物降低我方守備力. A game that named its monsters would use the name in at
-  least one of those seven lines. The "236 item / spell / monster records" figure
-  this repository repeated for months was an assumption nobody checked.
-- **76 mapped glyph slots that no dumped corpus references.** Their vocabulary
-  reads as special-attack names — 鳳凰, 隕, 砲, 旋, 焦, 煌, 鋼, 虎, 犬. The likely
-  home is a table stored as a **bare array** with no count prefix, like the class
-  skill array at 0x09739, which `uitext.py` cannot see by construction. A
-  0x39-stride table sits immediately after the destination table in every overlay
-  and is the best candidate. Use `tools/tblprobe.py`.
-- **Character names** (狄克 / 琳) and the battle HP/MP plate, which are not in the
-  overlay string tables.
-
+  dimensions has not been found, so images cannot yet be re-encoded. This is now
+  the only category of in-game text with no route to English.
+- **無裝備 and the equipment dash filler.** The status screen writes "nothing
+  equipped" from code or from an entry not yet scanned — a byte search for 無裝
+  finds it in neither entry 48 nor 1098. Cosmetic: two Chinese strings on an
+  otherwise English screen.
+- **Entries 190, 208, 367, 831, 881, 893, 933.** Four or five "messages" each that
+  decode as junk under the script parser, so either they are not script entries or
+  they use a format nobody has read. The new-game text crawl is the likely
+  occupant of at least one.
 - **44 over-read messages.** 4% of the total; the length byte or a table slot
   behaves unexpectedly. Flagged in the spreadsheet, individually identifiable, and
   left untranslated.
-- **The item name field width** (see FORMATS.md). Documented as 8 units, but the
-  extracted sheet truncates at three characters. This is the difference between a
-  16-character and an 8-character item-name budget and blocks writing item English.
 - **How script entries reach memory.** No overlay in `loadmap.txt` loads entries
   23/249/390/625/794, so `cmd_loadmap` is missing a code path.
+- **One-unit fields cannot hold English words.** The shop's 買 and 賣 are single
+  units, i.e. two Latin characters. Not a gap in knowledge — a limit of the
+  digraph approach, and the only fix is a draw-routine change or a word glyph.
 
+## What the reinsertion pass taught
+
+Every one of these cost at least one broken build. They are listed because the
+pattern is the same each time: an inherited constant or a convenient assumption
+that nothing had ever checked.
+
+- **Entry lengths are fixed allocations.** Rebuilding a script entry to fit its
+  contents shrank the archive by 174 KB and broke the battle system. Write back
+  the same length.
+- **Record 0 could not be addressed.** The sheet stored a record "base" and added
+  `0x4C`; record 0's base would be negative, so the first weapon in every shop
+  stayed Chinese. Address name fields, not bases.
+- **Content matching needs a record header.** Without one, writes land inside
+  longer untranslated strings and inside code — the latter locks the game up with
+  DOS/4GW `Illegal descriptor type 0`.
+- **Match count and entry size identify an overlay.** ~130 entries matched by
+  content; the ones that crashed the game matched a handful and were not 65535
+  bytes.
+- **`0x0000` is 一, and 一 is a horizontal bar.** Writing it into engine-filled
+  cells drew a row of dashes across the equipment screen. A preserved cell should
+  copy whatever the original held.
+- **Low glyph indices are small numbers.** 是 is `0x000B`; a one-unit search for it
+  matched 37 numeric fields.
+- **The archive size is a diagnostic.** Comparing two file sizes found the cause
+  of a crash that four rounds of reasoning had missed. `tools/verify_patch.py`
+  now does it automatically.
 
 ## Known weaknesses
 
@@ -242,26 +246,22 @@ translating chapter 1 first exercises that region as a by-product.
 
 ### Order of work
 
-1. ~~Locate the menu / item / spell name tables.~~ Done — entry 1098, `names.py`.
-   ~~Settle the name field width first.~~ Done — 5 units / 10 characters, verified
-   by `names.py layout`.
-2. ~~Translate the dialogue.~~ Done — 1,064 of 1,064, 1.41×, nothing over 252 units.
-3. ~~Write the item / spell / monster English.~~ Done — 235 of 235.
-4. ~~The character-name table.~~ Done — entry 48, 6-byte grid at `0x14C7`, nine
-   names. The destination table is done too, all 29 across five chapters.
-5. ~~The battle HP/MP plate.~~ Found — entry 48 `0x1509`-`0x154B`, five party
-   name slots plus an `HP··MP` header. **Nothing in this repository is now in the
-   looked-for-and-not-found state.**
-6. ~~The remaining UI strings.~~ Entry 48 is complete: every row is either
-   translated or shown not to be text. What is left is the fifteen destination
-   names recovered from run-together records, whose offsets are estimated and
-   want checking before a patch.
-7. **The 16-byte image descriptor table** for the title-screen graphics
-   (開始新遊戲 / 繼續舊冒險), which has never been searched for in earnest, and the
-   **digraph font and line-setter** work below.
-4. Design the digraph font: `font.py export`, draw 8x8 letter pairs into free slots,
-   `font.py import`.
-5. Write the line-setter: wrap at 24 columns, pad each line to exactly 12 units, and
-   start each newline-separated block of column J on a fresh line. Preserve the three
-   engine-filled cells at `e390 m2` (marked `~~~~~~`).
-6. Resolve the 44 over-read messages.
+1. ~~Locate the item / spell tables and settle the field widths.~~ Done — name 5
+   units / 10 characters, description 12 / 24, verified by `names.py layout` and
+   again against retail bytes.
+2. ~~Translate the dialogue.~~ Done — 1,064 of 1,064.
+3. ~~Write the fixed-width English.~~ Done — 317 records across all three tables.
+4. ~~The character-name table.~~ Done — entry 48, 6-byte grid at `0x14C7`.
+5. ~~The battle HP/MP plate.~~ Done — entry 48 `0x1509`–`0x154B`.
+6. ~~The remaining UI strings.~~ Entry 48 complete; written into every overlay
+   copy by content match.
+7. ~~The digraph font and line-setter.~~ Done — `tools/patch_all.py`, one
+   allocation pass over every English string in the project.
+8. **Remaining work**, in the order it is worth doing:
+   - the 16-byte image descriptor table, for the title-screen graphics;
+   - entries 190, 208, 367, 831, 881, 893, 933, one of which is likely the
+     new-game text crawl;
+   - 無裝備 and the equipment dash filler, wherever they are written from;
+   - the 44 over-read messages;
+   - the 15 destination names whose offsets are still estimated;
+   - a draw-routine change, if `Bu` / `Se` in the shop is worth a code patch.

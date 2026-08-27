@@ -83,14 +83,20 @@ reading — "it looks like a letter" is a live hypothesis, not a stretch.
 
 | set | slots | dialogue uses |
 |---|---|---|
-| halfwidth `D O S` | `0x143`–`0x145` (contiguous — "DOS") | 0 |
-| halfwidth `M P H` | `0x1d7`–`0x1d9` (MP / HP) | 0 |
-| halfwidth `X` | `0x263` | 0 |
+| fullwidth `D O S` | `0x143`–`0x145` (contiguous — "DOS") | 0 |
+| fullwidth `M P H` | `0x1d7`–`0x1d9` (MP / HP) | 0 |
+| fullwidth `X` | `0x263` | 0 |
 | fullwidth `Ａ Ｂ Ｃ` | `0x55b`, `0x55d`, `0x57b` | 6 / 6 / 4 — NPC labels 商人Ａ, 村人Ｂ, 村人Ｃ |
 | fullwidth `Ｚ` | `0x17a` | 2 — the sleeping sound effect at e23 m47 |
 
-Also present: halfwidth digits `0`–`5`, fullwidth `８ ９`, `/ + %`, a fullwidth
-hyphen and a box-drawing dash.
+Also present: digits `0`–`5` (`0x3f0`, `0x3f2`, `0x27a`, `0x45f`, `0x460`, `0x27b`),
+fullwidth `８ ９`, `/` (`0x291`), `+ %`, a fullwidth hyphen and a box-drawing dash.
+**All of these are full-width cells**, one letter per 16×16 glyph — `charmap.json`
+writes some of them as ASCII (`D`, `M`, `/`, `0`) and some in fullwidth form
+(`Ａ`, `８`, `＋`), which is a notation inconsistency, not two kinds of glyph. It
+matters because `mkfont` builds patched cells from `chr(32..126)`, so an ASCII `D`
+in the map is a retail full-width glyph while an ASCII `D` in patched text is half
+of a digraph pair.
 
 `0x17a` sits one pixel lower than Ａ Ｂ Ｃ. It was allocated in entry 23 while the
 letters were allocated in entry 390, so it was drawn first, in a different pass, and
@@ -343,70 +349,155 @@ this way. A record containing an unmapped index cannot be decoded and will be
 skipped entirely, which looks identical to the record not existing.
 
 
-## Item, spell and monster names — entry 1098
+## Item, spell and skill names — entry 1098
 
-Entry 1098 is the game's data bank, not only an icon sheet. Before the icons it
-holds fixed-width name/description records:
+Entry 1098 is the game's data bank, not only an icon sheet. It holds three
+fixed-width name/description tables, all with the same record shape:
 
 ```
-record stride  0x50 (80 bytes), first record at 0x145
-+0x4C          name field,        5 units, padded with 0x0066
-+0x56          3 units, ALWAYS 0x0066 in all 245 slots - a fixed gap
-+0x5C          description field, 12 units, padded with 0x0066
-+0x74          4 units, ALWAYS 0x0066 - a fixed gap
-+0x7C          binary stats, 16 units (32 bytes)
+name field         5 units, padded with 0x0066   ->  10 Latin characters
++0x0A              3 units, ALWAYS 0x0066 - a fixed gap
++0x10              description, 12 units          ->  24 Latin characters
++0x28              4 units, ALWAYS 0x0066
++0x30              binary stats, 16 units (32 bytes)
 ```
 
-5 + 3 + 12 + 4 + 16 = 40 units = 0x50 exactly. Note that the name/description
-block starts at +0x4C and therefore runs past the nominal record end into the
-next stride slot; the offsets above are relative to the record bases `names.py`
-uses (`FIRST = 0x145`), not to a natural record boundary. Read the columns, not
-the record numbering.
+5 + 3 + 12 + 4 + 16 = 40 units = 0x50 exactly.
 
-**These offsets were wrong until 2026-08-26.** This file said name 8 units at
-+0x42 and description 14 units at +0x52, and `names.py` was coded to match. That
-window starts five units early and ends three units into the name, which is why
-`dialogue.xlsx` truncated every name at three characters, spilled the fourth into
-the description (`賢者之|杖受諸神保護的大賢者`), and made the spell rows look
-garbled with a junk prefix (`功迅風咒`, `藍書[2c1f]裝夢之咒`) - the prefix was the
-previous record's stat bytes decoding as glyphs. Verified empirically with
-`names.py layout`, which probes every u16 column of the stride.
+| table | name fields at | stride | records |
+|---|---|---|---|
+| items and spells | `0x0001` + n × `0x50` | `0x50` | 239 |
+| special attacks and summons | `0x07F21` | `0x2A` | 49 |
+| plot items | `0x08F89` | `0x50` | 29 |
 
-**0x0000 is the character 一 here, not padding.** Both fields pad with 0x0066.
-The old `text()` dropped 0x0000 as padding, which silently deleted 一 from
-descriptions: 一人速度上升 read as 人速度上升, 同伴免死一次 as 同伴免死次.
+**There is no monster-name table, and the game appears not to name its monsters.**
+The `Item-Spell-Monster` sheet is misnamed for historical reasons. The 49-record
+table holds special attacks (寒冰斬, 破空裂地斬, 急風龍卷斬) and named summons and
+bosses (龍王加爾克, 武神亞特斯, 聖獸托洛克, 守護神拉迪, 德亞斯) — things a
+character *uses*, listed with a level on the status screen. 犬爪獸 is one of them,
+not an enemy. Every battle message calls the enemy generically 怪物: 怪物脫逃,
+怪物生命力增加, 怪物防禦力增加, 怪物封住___魔法, 怪物使用一擊必殺, 怪物使用偷錢術,
+怪物降低我方守備力. A game that named its monsters would use the name in at least
+one of those seven lines.
 
-235 populated records, all items and spells. Sections are positional rather than tagged: items first,
-spells from roughly 0x4500, monsters from roughly 0x8000, with unpopulated gaps
-between. The icon sheet at 0x4E20 and portraits at 0xA108 sit inside the same
-entry.
+**Address the NAME FIELD, never a record "base".** Earlier revisions of this file
+described the layout as "record base `0x145`, name at base + `0x4C`". That base is
+a fiction, and it cost three separate boundary errors:
 
-Field widths translate to **10 Latin characters for a name and 24 for a
-description** at two letters per cell. That is tighter than the 16/28 this file
-used to claim, and tight enough to shape the English: most two-word item names
-have to close up the space (`SilverHelm`, `FlameAegis`, `BoltMirror`).
+- it could not express **record 0** at all, whose name field is `0x0001` and whose
+  base would therefore be *negative*, so the first weapon in every shop stayed
+  Chinese through five builds;
+- `FIRST = 0x145` hid **four more records** below it — 鐵刀, 匕首, 鐵槍, 鐵弓, which
+  are the starting equipment and so the first items any player sees;
+- `ICONS = 0x4E20` hid the **skill and plot tables** above it, and produced two
+  confident false conclusions that stood for months: that the table holds 235
+  records, and that there was nothing above the icons. The `~0x8000` figure
+  `README.md` had recorded from the start was right all along.
 
-Section boundaries are positional. **Spells begin at 0x3E35**, not the 0x4500
-quoted in earlier revisions. The main table's populated run ends at 0x04AB5.
+The name fields are the real grid. Iterate those.
 
-**Entry 1098 does not end there.** Two further tables sit above what was long
-assumed to be an icon boundary at `0x4E20`:
+**0x0000 is the character 一 here, not padding.** Every field pads with 0x0066.
+Dropping 0x0000 as padding silently deleted 一 from descriptions: 一人速度上升 read
+as 人速度上升, 同伴免死一次 as 同伴免死次.
 
-| table | at | stride | layout | entries |
-|---|---|---|---|---|
-| special attacks and summons | `0x07F21` | `0x2A` | name 5 units at +0x00 | 49 |
-| plot items | `0x08F89` | `0x50` | name 5 units at +0x00, description 12 at +0x10 | 29 |
+Sections are positional rather than tagged. **Spells begin at 0x3E35**, not the
+0x4500 earlier revisions quoted; the main run ends at `0x04AB5`. The icon sheet at
+`0x4E20` and the portraits at `0xA108` sit between the tables, not after them.
 
-The plot table's record is the **same `[name 5][gap 3][desc 12]` block** as the
-main item table, sitting at offset 0 instead of +0x4C — independent confirmation
-of that layout.
+> The field offsets themselves were wrong until 2026-08-26 — this file said name
+> 8 units at +0x42 and description 14 at +0x52, and `names.py` matched. That
+> window starts five units early and ends three into the name, which is why
+> `dialogue.xlsx` truncated every name at three characters and spilled the fourth
+> into the description (`賢者之|杖受諸神保護的大賢者`), and why the spell rows looked
+> garbled with a junk prefix (`功迅風咒`) that was really the previous record's
+> stat bytes. Settled with `names.py layout`, which probes every u16 column.
 
-`names.py`'s `records()` used to stop at `0x4E20`, so nothing ever read these.
-That single constant produced two false conclusions that stood for a long time:
-that the table holds 235 records, and that the game does not name its monsters.
-The `~0x8000` figure in `README.md` was right all along.
+`tools/names.py` dumps these to JSON; `tools/patch_all.py` writes English back in
+place.
 
-`tools/names.py` dumps these to JSON, and patches translations back in place.
+## Reinsertion — how English is written back
+
+`tools/patch_all.py` allocates glyph cells **once** for every English string in
+the project, then writes the dialogue, both entry-1098 tables and the UI. Doing it
+in separate passes cannot work: `names.py`, `uitext.py` and `insert_english.py`
+each allocate from the top of `data/free_slots.txt` independently, so running any
+two repaints the other's cells and the item names come out spelled in the
+dialogue's letters.
+
+### Line setting
+
+The box is 12 cells per line, two Latin letters per cell, so a line is 24
+characters. The engine wraps at 12 by itself — retail messages are not multiples
+of 12 — but it wraps mid-cell, so the setter pads to the line end with `0x0066`
+whenever the next word would straddle. That padding is the single largest cost in
+the reinsertion. English runs **1.44×** the Chinese by unit count.
+
+A cell whose right half is a space **is** the single-letter cell, so it always
+exists and consumes two characters. Treating it as a fallback wastes a cell per
+word, which alone pushed most item descriptions out of their fields.
+
+`~` never pairs with anything but itself: a run of engine-filled cells must start
+on a cell boundary, or the run slides half a cell and writes a number over the
+word before it.
+
+### Allocation is a fixed point
+
+Which pairs deserve slots depends on the layout; the layout depends on which pairs
+have slots. Seeding with an empty set does **not** converge — with no pairs
+available every cell falls back to a single letter, so no pair is ever counted and
+none allocated. Approach it from the other side: assume every pair exists, see
+what the layout asks for, keep the most frequent. Two passes; the third changes
+nothing.
+
+Every pair a **fixed-width** string needs is mandatory, because a field is n units
+and cannot grow. Guarantee those first and give the dialogue what is left.
+
+### The slot pool is computed, not read
+
+`data/free_slots.txt` lists 539, which is not enough — the fixed-width strings
+alone want ~500 distinct pairs. But that list dates from when only the battle UI
+was being translated. Once the dialogue and the tables are English, every glyph
+only they used is free too. So: all 2048, minus every index still referenced by
+Chinese the patch does not replace, minus `0x0000`, `0x0066` and `0x0593`.
+
+Those three are real glyphs with jobs. `0x0000` is both 一 and the engine's
+placeholder — leaving it in the pool put a Latin cell in slot 0, and every field
+ending on that cell read back as an engine fill.
+
+### Matching by content, with a header
+
+FORMATS has always said to search by content rather than offset, and the overlays
+prove why: about 130 entries carry copies of the same menus, most with exactly 94
+records. But content alone is not enough:
+
+- **A record header is required for every write.** `[u16 position][u16 count]` is
+  what distinguishes a string the engine draws from bytes that happen to look like
+  one. Without it, writes landed inside longer untranslated strings (身體： matched
+  inside 身體狀況：) and inside code, which locked the game up.
+- **Longest first, no overlaps.** 回復系 is a substring of 現在不可使用非回復系魔法.
+- **Low indices are numbers.** 是 is `0x000B` and 好 is `0x000E`, so a one-unit
+  pattern matched 37 places in entry 48, nearly all numeric fields.
+- **Entry size gates the entry.** Only 65535-byte entries with 20+ matches are
+  written; anything else is a data blob with coincidences.
+
+The character-name table and the class skill array are **bare arrays with no
+header**, so they are the sole exception, matched header-free and only inside an
+entry that has already produced a validated match.
+
+### The class skill array
+
+At `0x09739`, eleven 2-unit entries, and `uitext.py` cannot see it — no header. The
+battle menu's third option is stored as 特·技 with units 0 and 2 replaced at draw
+time from this table, so **every class must resolve to the same English word**:
+write `Sk` and `l ` into all eleven against the shipped middle cell `il`. Left
+unpatched the menu reads `劍il技`.
+
+### What cannot be translated
+
+A **one-unit field is two Latin characters**. The shop's 買 and 賣 cannot be Buy and
+Sell; `Bu` and `Se` are the whole of what fits. The only ways out are a draw-routine
+change or a word glyph — a single 16×16 cell containing "Buy" in three narrow
+letters, which would not match the digraph font's rhythm.
 
 ## Picture entries — skip/run codec
 
@@ -486,9 +577,31 @@ which is the ceiling rather than a near miss. Message offsets are u16 and
 memory-relative, so an entry's payload cannot exceed 64 KB; the largest is entry 23
 at 29,874 bytes.
 
-Both limits bind before any font or width work does. Expanding text past them means
-splitting messages, which adds offset-table entries and moves every message after
-the insertion point.
+**A third limit binds before either: the entry is a FIXED-SIZE BUFFER.**
+
+| entries | size |
+|---|---|
+| script: 23, 249, 390, 625, 794 | `65537` (`0x10001`) each, to the byte |
+| UI overlays: 48, 258, 416, 612, 790 and ~100 scene copies | `65535` (`0xFFFF`) |
+| font: 4 | `131073` (`0x20001`) |
+| data bank: 1098 | `61001` |
+
+These are **allocations, not measurements**. `script_edit.build` emits only the
+bytes the messages use, and an archive rebuilt that way came out 174,054 bytes
+short — the battle system broke immediately, because whatever the engine expects
+after the script block had moved. Any tool that rewrites an entry must write back
+the same length. The space past the script block is `0x00` filler and can be grown
+into freely; the retail script uses roughly 30 KB of entry 23's 65,537, and English
+at 1.44× still leaves ~24 KB spare.
+
+The 65535 figure is also the most reliable way to **identify a UI overlay**. Writing
+English into every entry that matched a string by content crashed the game
+outright with DOS/4GW `Illegal descriptor type 0 for int D`; the offenders were
+data blobs with coincidental matches, and none of them was 65535 bytes.
+
+Both unit limits bind before any font or width work does. Expanding text past them
+means splitting messages, which adds offset-table entries and moves every message
+after the insertion point.
 
 ## Character-name table
 
