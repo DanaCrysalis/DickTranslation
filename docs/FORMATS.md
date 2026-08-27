@@ -108,6 +108,13 @@ never quite matched the later baseline.
 `0x066` is the full-width space and is drawn constantly despite being blank; `0x593`
 is referenced by the script. Neither is safe to repaint.
 
+**A third category exists: slots with ink that are not characters.** `0x2be`
+renders as an empty box with one grey line along the top edge. It is not blank, so
+it is not in the 353 count above, and it carries no reading - but it *is*
+referenced, as the entire "description" of 聖光槍 and 冰盾 in entry 1098, both of
+which should be read as having no description. `0x2bf` is also unmapped and may be
+its pair. Do not assume "has ink" means "is a character".
+
 ## Rendering
 
 Screen is mode 13h, 320×200, 8bpp. Screen pitch 320; the dialogue box advances
@@ -199,6 +206,37 @@ The battle menu's third option is a template. The stored record is `特·技`, b
 units 0 and 2 are replaced at draw time with the character's class skill name,
 taken from a bare 2-unit array at `0x09739` in entry 48:
 
+> **Location CONFIRMED (2026-08-26).** `0x09739` is right, and each entry is
+> 4 bytes. An archive-wide byte search puts 弓術 (`92 02 e3 01`) at entry 48
+> +`0x9741` and 斧擊 (`1a 02 09 01`) at +`0x974D` — exactly `0x9739 + 2x4` and
+> `0x9739 + 5x4`, the third and sixth entries of the list below. Eleven entries,
+> 44 bytes, `0x9739`-`0x9764`.
+>
+> This also explains the `0x0975B` row in `dialogue.xlsx` that reads 槍技神法:
+> entry 9 of the array is 刀法, whose second unit 法 is `0x0004`, and `uitext.py`
+> read that 4 as a record length and took the next four units — 槍技神法, which
+> are entries 10 and 11. The bare array is invisible to the scanner by design,
+> and was found here only because one of its own units happens to be the number 4.
+>
+> **Why the extracted copy looked empty.** `out/0048.bin` is not a clean
+> extraction — it is the **patch output**, with the `battle_full` preset already
+> applied in place. Diffing it against a fresh extraction shows that *every*
+> changed `u16` has a high byte of `06` or `07`, i.e. lies in the free/blank slot
+> range `0x6A1`-`0x7FF` that `mkfont.py` repaints with Latin digraphs. Nothing is
+> stale and nothing is corrupt; the Chinese has simply been replaced with English
+> where the preset covers.
+>
+> At `0x9739` the patched file holds `06EA 072D` repeated eleven times. That is
+> not fill: it is the same repainted pair written into all eleven class entries,
+> which is exactly what this table's design forces — every class shares the middle
+> cell, so every class must resolve to the same English word. The constraint
+> described below is already implemented in the proof-of-concept patch.
+>
+> **Two earlier notes in this file were wrong, and both came from probing the
+> patched file as though it were retail data.** When reading raw bytes, extract
+> from a clean `DICK.DAT` to a separate directory.
+
+
 ```
 特技 劍技 弓術 精神 特技 斧擊 無· 武技 刀法 槍技 神法
 ```
@@ -212,6 +250,90 @@ Only the middle unit is static. The label therefore renders as
 so a single English word has to be split across all three — "Sk" + "il" + "l ".
 Because every class shares one middle cell, per-class English names are
 impossible without a code change.
+
+### Overlay record header — [position][count], not [count][trailer]
+
+`uitext.py` models an overlay string as `u16 count`, units, `u16 trailer`. The
+real shape is:
+
+```
+u16  screen position   byte offset into a 320-wide screen
+u16  unit count
+n x u16  units
+```
+
+What the tool calls a trailer is the **next record's position word**. Walking the
+correct shape from `0x1509` in entry 48 yields five 3-unit records at `0x6E5F`,
+`0x861F`, `0x9DDF`, `0xB59F`, `0xCD5F` — x=95 with y=88, 107, 126, 145, 164, five
+party rows exactly 19 pixels apart — then `HP··MP` and `/`. The same walk over
+`0x1600` gives 頁數, `/`, `MP：`, five more party rows on the identical `0x17C0`
+vertical stride, then the six element tabs 火·系 風·系 冰·系 光·系 雷·系 回復系, all
+sharing position `0x2452` because they are tabs drawn in one place.
+
+`pos % 320` and `pos // 320` give x and y, which makes this a **test**: a genuine
+record has a position below `0xFA00` (64000); a phantom one usually has `0x0000`.
+It also explains why every offset in `dialogue.xlsx` is the count field with the
+content at +2.
+
+### The battle HP/MP plate
+
+Found, and it needs no image work — the labels are ordinary full-width glyphs
+(H `0x01D9`, P `0x01D8`, M `0x01D7`).
+
+```
+0x01509  pos 6E5F  n=3   ___     party row 1   x=95  y=88
+0x01513  pos 861F  n=3   ___     party row 2         y=107
+0x0151D  pos 9DDF  n=3   ___     party row 3         y=126
+0x01527  pos B59F  n=3   ___     party row 4         y=145
+0x01531  pos CD5F  n=3   ___     party row 5         y=164
+0x0153B  pos 55BE  n=6   HP··MP  header       x=190  y=68
+0x0154B  pos 0000  n=1   /       placed by code
+```
+
+The five name slots are three units each and are filled at draw time from the
+character-name table. It stayed hidden because those slots hold nothing but
+`0x0000` and the header is only six units, so nothing in the old record model had
+a plausible count to latch onto.
+
+The item menu grid sits just above, eight 8-unit records at `0x016BD` through
+`0x01749`, positions forming a 2 x 4 grid at x=18 and x=178, y=99/117/135/153.
+Their `的的的的的的的的` content is the byte pattern `11 11` repeated (的 is
+`0x0011`) — a placeholder overwritten at draw time.
+
+### Bare arrays: the scanner's blind spot
+
+`uitext.py` finds a record by requiring `u16 count`, that many units, then a
+`u16` trailer. **Not every table has that shape.** The class skill array at
+`0x09739` in entry 48 (documented below) is a bare run of 2-unit entries with no
+count and no trailer, and no dump has ever found it automatically - it is known
+only because it was read out of the code. Any other table stored the same way is
+invisible to every scan run so far.
+
+This is the leading explanation for the 76 mapped glyph slots that no dumped
+corpus references. Their vocabulary - 鳳凰, 隕, 砲, 旋, 焦, 煌, 鋼, 虎, 犬 - reads
+as special-attack names (鳳凰旋, 隕石砲) rather than dialogue. `tools/tblprobe.py`
+derives stride and parity for a table of unknown format and is the tool for
+finding them.
+
+### The destination table
+
+Each battle overlay carries the world-map destination list for its own chapter,
+in the `0x0940`-`0x0965` region:
+
+| overlay | chapter | names |
+|---|---|---|
+| 48 | 1 | 那都村 古雷村 森林 礦坑 奧丁城下鎮 小村莊 峽谷 |
+| 258 | 2 | 格倫村 達蓮王城 穆古村 神殿 德茲村 科林港 哈樂德村 |
+| 416 | 3 | 哈路利村 貝德村 克魯達村 愛斯那村 沙利安村 布德村 |
+| 612 | 4 | 拉賽倫王城 羅蘭村 文森村 托夫村 康泰村 |
+| 790 | 5 | 摩里斯城 尼斯卡城 伊克城 薩爾城 |
+
+Some entries are read as one long record by `uitext.py`'s scanner and need
+`tblprobe.py` to separate. Immediately after this table, every overlay has a
+**0x39-byte-stride table** whose columns decode as the nonsense `丑妻` at exact
+57-byte intervals (48 at `0x0971B`; 612 at `0x09736`, `0x0976F`, `0x097A8`; 790 at
+`0x095A1`, `0x095DA`, `0x09613`). A nonsense string repeating on a fixed stride is
+not a string - it is two columns of a fixed-width record table. Not yet decoded.
 
 ### Vocabulary outside the dialogue
 
@@ -228,26 +350,61 @@ holds fixed-width name/description records:
 
 ```
 record stride  0x50 (80 bytes), first record at 0x145
-+0x42          name field,        8 units, padded with 0x0000
-+0x52          description field, 14 units, padded with 0x0066
-remainder      binary stats
++0x4C          name field,        5 units, padded with 0x0066
++0x56          3 units, ALWAYS 0x0066 in all 245 slots - a fixed gap
++0x5C          description field, 12 units, padded with 0x0066
++0x74          4 units, ALWAYS 0x0066 - a fixed gap
++0x7C          binary stats, 16 units (32 bytes)
 ```
 
-236 populated records. Sections are positional rather than tagged: items first,
+5 + 3 + 12 + 4 + 16 = 40 units = 0x50 exactly. Note that the name/description
+block starts at +0x4C and therefore runs past the nominal record end into the
+next stride slot; the offsets above are relative to the record bases `names.py`
+uses (`FIRST = 0x145`), not to a natural record boundary. Read the columns, not
+the record numbering.
+
+**These offsets were wrong until 2026-08-26.** This file said name 8 units at
++0x42 and description 14 units at +0x52, and `names.py` was coded to match. That
+window starts five units early and ends three units into the name, which is why
+`dialogue.xlsx` truncated every name at three characters, spilled the fourth into
+the description (`賢者之|杖受諸神保護的大賢者`), and made the spell rows look
+garbled with a junk prefix (`功迅風咒`, `藍書[2c1f]裝夢之咒`) - the prefix was the
+previous record's stat bytes decoding as glyphs. Verified empirically with
+`names.py layout`, which probes every u16 column of the stride.
+
+**0x0000 is the character 一 here, not padding.** Both fields pad with 0x0066.
+The old `text()` dropped 0x0000 as padding, which silently deleted 一 from
+descriptions: 一人速度上升 read as 人速度上升, 同伴免死一次 as 同伴免死次.
+
+235 populated records, all items and spells. Sections are positional rather than tagged: items first,
 spells from roughly 0x4500, monsters from roughly 0x8000, with unpopulated gaps
 between. The icon sheet at 0x4E20 and portraits at 0xA108 sit inside the same
 entry.
 
-Field widths translate to **16 Latin characters for a name and 28 for a
-description** at two letters per cell - far more generous than the menu tables.
+Field widths translate to **10 Latin characters for a name and 24 for a
+description** at two letters per cell. That is tighter than the 16/28 this file
+used to claim, and tight enough to shape the English: most two-word item names
+have to close up the space (`SilverHelm`, `FlameAegis`, `BoltMirror`).
 
-**Unverified, and it matters.** The name column in `dialogue.xlsx` truncates at
-*three* characters, with the fourth spilling into the description:
-`賢者之|杖受諸神保護的大賢者`, `聖十字|杖能化日月星晨為力量`, `引導之|燈？？！！`.
-An 8-unit field would hold all four. Either that sheet was generated with a narrower
-field or the offset above is wrong — and it is the difference between a 16-character
-and an 8-character name budget. Settle it with `names.py dump` against a clean entry
-1098 before writing any item English.
+Section boundaries are positional. **Spells begin at 0x3E35**, not the 0x4500
+quoted in earlier revisions. The main table's populated run ends at 0x04AB5.
+
+**Entry 1098 does not end there.** Two further tables sit above what was long
+assumed to be an icon boundary at `0x4E20`:
+
+| table | at | stride | layout | entries |
+|---|---|---|---|---|
+| special attacks and summons | `0x07F21` | `0x2A` | name 5 units at +0x00 | 49 |
+| plot items | `0x08F89` | `0x50` | name 5 units at +0x00, description 12 at +0x10 | 29 |
+
+The plot table's record is the **same `[name 5][gap 3][desc 12]` block** as the
+main item table, sitting at offset 0 instead of +0x4C — independent confirmation
+of that layout.
+
+`names.py`'s `records()` used to stop at `0x4E20`, so nothing ever read these.
+That single constant produced two false conclusions that stood for a long time:
+that the table holds 235 records, and that the game does not name its monsters.
+The `~0x8000` figure in `README.md` was right all along.
 
 `tools/names.py` dumps these to JSON, and patches translations back in place.
 
@@ -333,7 +490,7 @@ Both limits bind before any font or width work does. Expanding text past them me
 splitting messages, which adds offset-table entries and moves every message after
 the insertion point.
 
-## Character-name table (in RAM)
+## Character-name table
 
 Three units per entry, centre-padded with `0x0066`:
 
@@ -341,6 +498,41 @@ Three units per entry, centre-padded with `0x0066`:
 005d 0066 005e   狄 · 克
 0066 000f 0066   · 琳 ·
 ```
+
+**It is not only in RAM.** A static copy sits in entry 48 on a 6-byte grid based
+at `0x14D9`, which is what makes it patchable without touching code:
+
+| offset | units | name | English |
+|---|---|---|---|
+| `0x14B5` | `0000 0000 0000` | — | empty |
+| `0x14BB` | `0000 0000 0000` | — | empty |
+| `0x14C1` | `0000 0000 0000` | — | empty |
+| `0x14C7` | `01b0 00c4 01b1` | 德瑞爾 | Darrel |
+| `0x14CD` | `005d 0066 005e` | 狄克 | Dick |
+| `0x14D3` | `0286 009a 005e` | 艾薩克 | Isaac |
+| `0x14D9` | `0066 000f 0066` | 琳 | Lin |
+| `0x14DF` | `0004 0066 0147` | 法蘭 | Fran |
+| `0x14E5` | `00bf 0066 01f0` | 諾隆 | Noron |
+| `0x14EB` | `0288 00be 009c` | 娜迪亞 | Nadia |
+| `0x14F1` | `0285 0066 0073` | 龍特 | Ronto |
+| `0x14F7` | `0287 025b 01a6` | 沙卡修 | Sakash |
+
+The 狄克 row is `005d 0066 005e` byte for byte — the same bytes this file already
+gives as the RAM example — so the static copy and the RAM copy share a layout.
+
+Two names exceed six characters and are shortened on screen only: **Darrell**
+becomes `Darrel` and **Sakashu** becomes `Sakash`. The dialogue keeps both in
+full.
+
+Three cells is **6 Latin characters**, and the English does not have to reproduce
+the centring — write it left-aligned and space-padded.
+
+Two cautions this table earned. First, `uitext.py` reports a bogus 15-unit
+"record" at `0x14DB`, because 琳 is glyph `0x000F` and the scanner read the
+character *Lin* as a unit count. Second, and usefully, that is the second bare
+array to surface this way — the class skill array appeared because its 法 is
+`0x0004`. **A bare array can be hunted deliberately by looking for records whose
+declared length equals a low-index glyph sitting where a name should be.**
 
 ## Save files
 
@@ -358,7 +550,31 @@ the menu draws a fixed 64×24 "新冒險" graphic instead of slot text.
 | portrait faces | entry 1098, offset `0xA108`, same cell format |
 | raw screens | 64000-byte entries (320×200); 768-byte entries are VGA palettes |
 | GUS patch bank | entry 0, and the loose `DATA` file (`GF1PATCH110`) |
+| slot-ordered glyph tables | entries 6 and 463, 4 bytes per record - see below |
 | code overlays | ~90 entries, prologue `1E 06 66 50 66 53 66 51 66 52 66 56 66 57 66 55` |
+
+### Entries 6 and 463 — slot-ordered glyph tables
+
+Neither had been catalogued. Both hold 4-byte records that walk the font in
+**ascending slot order**, each glyph index paired with a small, nearly constant
+second `u16` (`0x001a` throughout entry 463; a different low value in entry 6):
+
+```
+entry 463 +0x30C5   欲參傑帝佔剷投魯額佩膽輩仍     slots 0x57F-0x58B, consecutive
+entry 463 +0x3199   萄景央季節瀾素端穩晨氛遷財駕淮察悍抵雜   0x5BA-0x5CC
+entry 6   +0x250E   淮察悍俊贏熟逝泡呆揚迫握隔唔跳扎   ascending, but a SUBSET
+```
+
+Entry 6 skips slots entry 463 includes, so they are two different lists rather
+than copies. `loadmap.txt` shows entry 6 is loaded by overlay 181 — the loader —
+to flat `0x2C0000` in the same pass as entry 4 (the font), entry 1098 (the data
+bank) and entries 2, 3 and 178, which makes it a global boot-time asset sitting
+beside the font. Entry 463 is scene-local, loaded by overlay 454 to `0x1A0000`.
+Purpose unknown; `tools/tblprobe.py` will derive their record layout.
+
+Consequence for the map work: **a slot-ordered table references a glyph without
+anyone having typed it into text.** "Referenced nowhere" therefore does not imply
+"belongs to an undumped text corpus" as strongly as it seems to.
 
 Overlays are copies of one engine with per-scene data; two overlays differ in about
 12 KB of scattered data plus a size shift. Overlay code addresses quoted in this file

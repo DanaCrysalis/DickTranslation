@@ -25,7 +25,9 @@ binding constraint it was expected to be — see "The real ceiling" below.
 |---|---|
 | `Dialogue` | column J is the English, one line per speaker block |
 | `Glossary` | ~170 terms: people, places, items, spells, plus the naming rules |
-| `Issues` | ~130 rows: map corrections, retail typos, open questions, tooling risks |
+| `Issues` | ~180 rows: map corrections, retail typos, open questions, tooling risks |
+| `Item-Spell-Monster` | 235 records, all translated |
+| `UI strings` | all five battle overlays, not just entry 48 |
 
 `Glossary` is terminology only. Anything that is a *defect* — a bad glyph
 reading, a writers' typo, a scanner artefact — is in `Issues`, sorted map
@@ -166,18 +168,73 @@ Translated in file order; read in narrative order.
 新科技軸心, sitting at the end of the script entry. Translated literally. It may
 be better left in Chinese or repurposed as a patch credit.
 
+## The item and spell table
+
+All 235 records are translated. The field budget is **10 Latin characters for a
+name and 24 for a description** — 5 and 12 cells at two letters each, verified
+with `names.py layout` after the documented offsets turned out to be wrong.
+
+### Abbreviation rule
+
+Ten characters is tight enough that most two-word names do not fit. In order:
+
+1. If the full form is exactly 11, **delete the space**: `SilverHelm`,
+   `RoyalCrown`, `BronzeMail`, `FlameAegis`, `MagicStaff`, `DeepFreeze`,
+   `BoltMirror`. This is period-correct for a mid-90s JRPG item list and keeps
+   both words readable.
+2. If it is 12 or more, **clip the modifier, never the type word** — the type is
+   what a player scans a shop list for: `Silv Sword`, `Pala Crown`, `Sapph Cuff`.
+
+Type words are fixed: Sword / Sabre / Dirk / Spear / Bow / Axe / Claws / Staff /
+Fist; Helm / Pin / Band / Sash / Crown / Hat; Mail / Plate / Armor / Robe / Vest /
+Veil / Gi; Aegis and Cuff. Aegis is forced — "Iron Shield" is eleven characters
+and no abbreviation of "Iron" rescues it.
+
+### Names that could not keep their Glossary form
+
+The dialogue keeps the full form; only the table shortens.
+
+| Glossary | table |
+|---|---|
+| Holy Cross Staff | `Holy Cross` |
+| Lamp of Guidance | `Guide Lamp` |
+| Wings of the Desert | `DesertWing` |
+
+Neither necklace appears in the table at all, so 沙淚項鍊 and 星水晶項鍊 cannot
+blur through this route.
+
+### Collisions resolved
+
+- 解毒草 keeps **Antidote**; the spell 解毒咒 becomes **Detox**.
+- 勇者 keeps **Hero** (Hero Sword, Hero Aegis); 英雄盾 becomes **BraveAegis**.
+- 稻妻護腕 becomes **Levin Cuff** so it stays distinct from 雷電頭帶 Bolt Band —
+  the source uses two different words for lightning.
+- 冥王 is **Hades** throughout the descriptions; "the Underworld King" cannot fit.
+- 幻滅聖咒 in the table and 幻滅聖炎 in dialogue are treated as one spell: 咒 is
+  the generic suffix every spell here carries. Table `Holy Flame`, dialogue
+  "Phantom Holy Flame".
+
+### Duplicate records are real
+
+極凍烈風 and 皇極破 each appear twice with identical descriptions, and 絕殺斷宙斬 /
+絕殺斷宙閃 differ only in the fifth character. Almost certainly per-character
+variants of one ultimate. Translated identically — nothing in the data
+distinguishes them and inventing a difference would be inventing content.
+
 ## What is left
 
-1. **UI strings** and **item / spell / monster names** — both sheets still
-   `todo`, both fixed-width.
-2. **The item name field width.** FORMATS.md says the name field is 8 units at
-   `+0x42`, which would hold four characters. The sheet truncates at **three**,
-   with the fourth spilling into the description: `賢者之|杖受諸神保護的大賢者`,
-   `聖十字|杖能化日月星晨為力量`, `引導之|燈？？！！`. Either the sheet was
-   generated with a narrower field or the documented offset is wrong — and it is
-   the difference between a 16-character and an 8-character name budget. Settle
-   this with `names.py dump` against a clean entry 1098 before writing any item
-   English.
-3. **The eight over-read messages** — e23 m196, e249 m17/m99, e625 m197/m216,
-   e794 m10/m16/m18/m24/m25/m94.
-4. **The digraph font and the line-setter**, per STATUS.md.
+1. **UI strings.** ~125 rows still `todo` in the sheet, plus the destination
+   table's exact field widths, which need `tblprobe.py` over `0x9390`-`0x9760`.
+2. ~~The character-name table~~ — found and translated. Entry 48, 6-byte grid
+   based at `0x14C7`, nine names: Darrel, Dick, Isaac, Lin, Fran, Noron, Nadia,
+   Ronto, Sakash. Three cells is six Latin characters, which shortens Darrell and
+   Sakashu on screen; the dialogue keeps both in full. The **battle HP/MP plate**
+   is still unfound and is now the only located-nothing item left.
+3. **The 0x39-stride table** after the destination list in every battle overlay,
+   and whatever bare array holds the 76 orphan glyphs.
+4. **The eleven over-read messages** — e23 m196, e249 m17/m99, e625 m197/m216,
+   e794 m10/m16/m18/m24/m25/m94. (An earlier revision of this file called them
+   "the eight"; the list has always had eleven entries, and the sheet flags 44
+   over-read messages in total, of which these are the ones called out
+   individually.)
+5. **The digraph font and the line-setter**, per STATUS.md.

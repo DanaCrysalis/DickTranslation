@@ -30,11 +30,75 @@ including several that were pixel-plausible and had survived every other check:
 |---|---|---|---|
 | `0x546` | 靈 | **麗** | 華麗的場景 / 美麗的島 |
 | `0x515` | 鬧 | **聞** | 傳聞說 |
-| `0x64E` | 塵 | **麾** | 先王麾下 |
+| `0x64E` | 塵 | ~~麾~~ | **both wrong — `0x64E` is 役 (戰役). See STATUS.md** |
 | `0x551` | 舉 | **笨** | 好像一群笨蛋一樣 |
 | `0x5C4` | 氣 | **氛** | 沒有王城的氣氛 |
 
-Read the sentence, not the glyph.
+### Check the scan limit before concluding something is absent
+
+`names.py` stopped at `0x4E20` for years on the belief that the icon sheet began
+there. Two tables sat above it. That one constant supported two confident false
+conclusions — that entry 1098 holds 235 records, and that the game does not name
+its monsters — and both survived because every dump agreed with every other dump,
+all of them reading the same truncated window.
+
+**An absence is only evidence if the search covered the space.** Before writing
+"not found", state what range was actually read. When a doc gives a figure that
+your tooling cannot reproduce (here, `~0x8000`), suspect the tooling first: the
+doc was written by someone looking at the game.
+
+### Two geometry tests that settle a doubtful record
+
+Overlay records carry a screen position (see FORMATS.md), and that makes the
+question "is this text?" answerable rather than a matter of taste:
+
+1. **Position.** `pos % 320` and `pos // 320` must give a sane x and y. A phantom
+   record usually has `pos = 0x0000`, or a y of 0 with x near 260.
+2. **Screen fit.** Glyphs are 16 pixels wide, so `x + 16 * n` must be at most 320.
+   This alone kills every long phantom: a 38-unit "string" would need 608 pixels
+   of a 320-pixel line.
+
+Calibrated against the 152 records already translated in entry 48, the pair
+resolved all 84 remaining doubtful rows without a single judgement call — 65 fail
+outright, 8 are the item-menu grid, 9 are round low values, and 2 stay ambiguous.
+
+**They only apply to position-headed records.** The destination table and the
+character-name table are bare arrays with no position word, so they fail these
+tests while being perfectly real. Check which kind of table you are in first.
+
+### Low glyph index means small number
+
+Before anything else, check whether the "text" is text. Slots were allocated on
+**first use**, so the first characters the writers typed hold the lowest indices —
+and any 16-bit numeric field with a small value decodes as one of them:
+
+```
+ 0 一   1 裝   2 備   3 魔   4 法   5 你   6 妳   7 他
+ 8 她   9 我  10 們  11 是  12 不  13 對  14 好  15 琳
+16 長  17 的  18 真  19 漂  20 亮  21 得  22 ，  23 。
+24 ：  25 ！  26 ？  27 （  28 ）  29 〔  30 〕  31 ；
+32 那  33 都  34 村  35 風  36 總  37 小  38 過  39 倒
+40 也  41 挺  42 舒  43 服  44 只  45 剩  46 婦  47 女
+```
+
+So a record reading `也倒（〕男人這` is a run of small integers, and `的的的的的的的的`
+is the byte pattern `11 11`. This produced four separate false readings in one pass:
+a "0x39-stride table" that was `FF`-fill (丑 = 0x01FF, 妻 = 0x02FF); a "class skill
+array" whose 法 was the value 4; two "character-name rows" whose 琳 was the unit
+count 15; and a "numeric table" at 0x5A00 whose 敵 衛 城 were the ids 802, 401, 403.
+
+It also cuts the other way, usefully. Inside a record that the scanner ran
+together, the character between two strings is the next record's unit **count** —
+`那都村魔古雷村備森林備` is 那都村, count 3, 古雷村, count 2, 森林, count 2. That
+recovered every destination name without a re-dump.
+
+**The test:** look up the indices. If most are below about `0x40` and the reading is
+incoherent, it is numeric. Real text mixes high indices freely — the character-name
+record at `0x014DB` has ten of eleven units above `0x9C`.
+
+Read the sentence, not the glyph. And read it in **every** corpus — the three
+most recent corrections (`0x2cb` 屠, `0x2e8` 燄, `0x5ea` 節) all came out of the
+item table, which has no dialogue uses at all.
 
 ## UI strings are a separate job from dialogue
 
@@ -95,8 +159,21 @@ takes part in and ask whether any of them is a real word.**
 `0x556` and `0x559` were once filed as "zero uses, can never be checked". Both were
 wrong: they have zero *dialogue* uses but appear in item descriptions, where both
 readings check out (青睞 "favour", 蠶絲 "silk"). The dialogue is 1,064 messages; the
-item, spell, monster and UI tables are a separate corpus and the tests above must
-cover them too.
+item, spell and UI tables are a separate corpus and the tests above must cover them
+too.
+
+This is now the highest-yield check there is. Running the zero-good-use test over
+the **item table** produced three corrections in one pass — `0x2cb` 屑→屠 (three
+uses, all 屠龍, zero dialogue uses), `0x2e8` 餞→燄 (one use, 火燄頭盔), `0x5ea`
+筋→節 — and, on the same day, one firm **non**-correction: `0x5c3` reads 早晨
+correctly in its single dialogue use and wrongly as 星晨 three times in the item
+table, which is a retail typo rather than a map error. Same test, opposite verdicts,
+and only the second corpus makes the difference visible.
+
+Also note what a slot-ordered table does to this reasoning. Entries 6 and 463 pair
+glyph indices with a small number in ascending slot order (see FORMATS.md), so a
+slot can be *referenced* without ever having been typed into text. "Referenced
+nowhere" is weaker evidence of an undumped corpus than it looks.
 
 ## Duplicate and mismatch checks
 
@@ -218,5 +295,9 @@ python tools/font.py export out/0004.bin glyphs/   # then open glyphs/<index>.pn
 indices were deliberately left unmapped rather than guessed; each has an ambiguous
 single use recorded in the notes from the last pass.
 
-Coverage is 98%. The remaining glyphs mostly appear once or twice in the whole game,
-and a translator reading in context will resolve them faster than this process will.
+Coverage is 100% by text volume for the dialogue and complete for the item table.
+**Three** indices remain unmapped, not thirteen — and one of them, `0x2be`, has
+been rendered and is not a character at all (an empty box with a single grey line).
+`data/unmapped.txt` is stale on two counts: it still lists `0x2c3` and `0x2c8`,
+both settled, and its header still argues that the font contains no duplicate
+bitmaps, which `STATUS.md` and `README.md` both retract.

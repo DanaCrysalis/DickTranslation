@@ -29,7 +29,14 @@
 - **Overlay/asset map**, **save format**, **icon and portrait banks**, **audio**.
 - **The dialogue translation.** All 1,064 clean messages are in English in column J
   of `dialogue.xlsx`, with a `Glossary` sheet (~170 terms) and an `Issues` sheet
-  (~130 rows). Growth 48,108 → 67,728 units, **1.41×**. See `docs/TRANSLATION.md`.
+  (~180 rows). Growth 48,108 → 67,728 units, **1.41×**. See `docs/TRANSLATION.md`.
+- **The item and spell table.** Entry 1098's field layout is settled and verified
+  by probe (name +0x4C, 5 units; description +0x5C, 12 units), and **all 235
+  records are translated** in the `Item-Spell-Monster` sheet. Budget is 10 Latin
+  characters for a name and 24 for a description.
+- **All five battle overlays are dumped**, not just entry 48. The four new ones
+  carry the per-chapter world-map destination table, and nothing else that 48
+  lacks.
 
 ## Numbers
 
@@ -53,9 +60,28 @@
   are images, proven by the font not being resident in memory at the title. The
   image codec is understood but the 16-byte descriptor table that carries
   dimensions has not been found, so images cannot yet be re-encoded.
-- **Item, spell and monster names.** Located and readable - entry 1098, 0x50
-  stride, 236 records, name +0x42 and description +0x52 (see FORMATS.md).
-  `tools/names.py` reads and patches them; the English is not yet written.
+- ~~**Item, spell and monster names.**~~ Done — 235 of 235, see Solved above.
+- ~~**Monster names: the game appears not to have any.**~~ **Wrong, twice.** A
+  screenshot of the status screen showed 犬爪獸, and searching for its bytes found
+  it at `0x081C1` — inside entry 1098, above the `0x4E20` limit that `names.py`
+  had always stopped at. Two tables live up there: 49 special-attack and summon
+  names at `0x07F21` and 29 plot items at `0x08F89`, all now translated. The
+  `~0x8000` figure this repository had recorded from the start was correct, and
+  the scan limit was what hid it. **The 76 orphan glyphs are explained too** —
+  鳳凰 in 鳳凰魔法, 犬 in 犬爪獸, 隕 in 慧星隕石, 砲 in 鬥氣砲, 旋 in 迴旋斬, 煌
+  in 星舞烈煌槍, 虎 in 虎之牙, 翡翠 in 翡翠手鐲. The reasoning below is kept
+  because the *argument* was sound and the *premise* was not: it is true that
+  every battle message calls the enemy generically 怪物 — 怪物脫逃, 怪物生命力增加,
+  怪物防禦力增加, 怪物封住___魔法, 怪物使用一擊必殺, 怪物使用偷錢術,
+  怪物降低我方守備力. A game that named its monsters would use the name in at
+  least one of those seven lines. The "236 item / spell / monster records" figure
+  this repository repeated for months was an assumption nobody checked.
+- **76 mapped glyph slots that no dumped corpus references.** Their vocabulary
+  reads as special-attack names — 鳳凰, 隕, 砲, 旋, 焦, 煌, 鋼, 虎, 犬. The likely
+  home is a table stored as a **bare array** with no count prefix, like the class
+  skill array at 0x09739, which `uitext.py` cannot see by construction. A
+  0x39-stride table sits immediately after the destination table in every overlay
+  and is the best candidate. Use `tools/tblprobe.py`.
 - **Character names** (狄克 / 琳) and the battle HP/MP plate, which are not in the
   overlay string tables.
 
@@ -83,8 +109,13 @@
   A duplicate is evidence to check, not proof of error — ask which corpus each slot
   serves. The related pairs `0x524` 愈, `0x55A` 鑲, `0x5EA` 筋, `0x66D` 脊 are worth
   re-rendering in that light.
-- Several glyphs were deliberately left unmapped rather than guessed. 13 remain,
-  listed in the notes accompanying the last mapping pass.
+- Three glyphs remain unmapped, not thirteen: `0x2be` (rendered — an empty box
+  with one grey line, **not a character**), `0x5cd` and `0x5d3`. `data/unmapped.txt`
+  and the `Unmapped` sheet are stale: they still list `0x2c3` and `0x2c8`, both of
+  which are settled in `charmap.json` and corroborated by the item table (`0x2c3`
+  is 鷹 from 飛鷹拳套 and 飛鷹頭帶, not 塵; `0x2c8` is 撤 against `0x645` 撒). That
+  file also still argues from "the font contains no duplicate bitmaps", the
+  reasoning this file retracts below.
 - Coverage percentages are by text volume, so they overstate how much of the *rare*
   vocabulary is known.
 - Some oddities in the decoded script are the **game's own typos**, not map errors:
@@ -135,6 +166,34 @@ rendering the glyph; two (`0x2a6`, `0x366`) by the bigram profile and then rende
 | `0x366` | 詩 | **誇** | 誇獎 / 誇張; `0x367`=獎 |
 | `0x17a` | 乙 | **Ｚ** | fullwidth Latin — the sleeping SFX Ｚ。。。Ｚ。。 |
 
+### Three further corrections, from the item corpus (2026-08-26)
+
+Found by running the zero-good-use test over the **item table** rather than the
+dialogue — the corpus that CONTINUING.md's "check every corpus" note exists for.
+
+| slot | was | is | how it was caught |
+|---|---|---|---|
+| `0x2cb` | 屑 | **屠** | zero dialogue uses; three item uses and all are 屑龍. 屠龍劍 Dragonbane, 屠龍槍, and 斬龍斧's 勇者屠龍時所用的巨斧. 屠 was absent from the map. Rendered |
+| `0x2e8` | 餞 | **燄** | one use in the whole game, 火餞頭盔 described as 以烈火鍛造的. 焰 is `0x2b1` with three correct item uses in the same corpus, so occupancy forced the variant 燄. Rendered |
+| `0x5ea` | 筋 | **節** | rendered. Duplicates `0x5be` 節, which is dialogue-resident; `0x5ea` has zero uses in any dumped corpus, so the two serve different corpora |
+
+Contrast `0x5c3`, which was NOT corrected: it has one dialogue use, 早晨 "morning",
+which is right, and three item uses that are all 星晨 for 星辰. Right glyph, wrong
+place — a **retail typo**, and 辰 being absent from the map confirms the writers
+never typed it. The two verdicts came out of the same test on the same day and are
+worth reading together.
+
+### Two long-standing open questions, closed
+
+- `0x505` is **垂**, confirmed by render. So 一臉垂喪 is the writers' own
+  contraction of 垂頭喪氣, not a map error. Open since the 0x4B0-0x6A0 pass.
+- `0x524` is **愈**, confirmed by render. The `PASS_NOTES.md` claim that `0x353`
+  and `0x524` are both 越 is wrong. Context could not settle it — all five uses are
+  the frame X來X, and 愈來愈 and 越來越 are equally idiomatic — but the corpus
+  argument pointed the right way: `0x353` is certainly 越 and writes 越來越 31
+  times across the same entries, so a same-corpus duplicate would have been
+  anomalous.
+
 Still unresolved, none blocking: `0x505` (一臉X喪 — 垂 may be right, as a contraction
 of 垂頭喪氣) and `0x5e3` (a snort of contempt, X！真煩 — any dismissive reading works,
 so it does not need identifying).
@@ -184,10 +243,22 @@ translating chapter 1 first exercises that region as a by-product.
 ### Order of work
 
 1. ~~Locate the menu / item / spell name tables.~~ Done — entry 1098, `names.py`.
-   **But settle the name field width first** (see FORMATS.md): the extracted sheet
-   truncates at three characters where the documented 8-unit field would hold four.
+   ~~Settle the name field width first.~~ Done — 5 units / 10 characters, verified
+   by `names.py layout`.
 2. ~~Translate the dialogue.~~ Done — 1,064 of 1,064, 1.41×, nothing over 252 units.
-3. Write the item / spell / monster English, and the remaining UI strings.
+3. ~~Write the item / spell / monster English.~~ Done — 235 of 235.
+4. ~~The character-name table.~~ Done — entry 48, 6-byte grid at `0x14C7`, nine
+   names. The destination table is done too, all 29 across five chapters.
+5. ~~The battle HP/MP plate.~~ Found — entry 48 `0x1509`-`0x154B`, five party
+   name slots plus an `HP··MP` header. **Nothing in this repository is now in the
+   looked-for-and-not-found state.**
+6. ~~The remaining UI strings.~~ Entry 48 is complete: every row is either
+   translated or shown not to be text. What is left is the fifteen destination
+   names recovered from run-together records, whose offsets are estimated and
+   want checking before a patch.
+7. **The 16-byte image descriptor table** for the title-screen graphics
+   (開始新遊戲 / 繼續舊冒險), which has never been searched for in earnest, and the
+   **digraph font and line-setter** work below.
 4. Design the digraph font: `font.py export`, draw 8x8 letter pairs into free slots,
    `font.py import`.
 5. Write the line-setter: wrap at 24 columns, pad each line to exactly 12 units, and
