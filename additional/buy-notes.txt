@@ -1,0 +1,48 @@
+code loading some menus:
+
+0008:0000A6A1 6656                push esi                                      
+0008:0000A6A3 668D36942D          lea  esi,[2D94]                               
+0008:0000A6A8 EB22                jmp  short 0000A6CC ($+22)  (down)            
+0008:0000A6AA 90                  nop                                           
+0008:0000A6AB 6656                push esi                                      
+0008:0000A6AD 668D36A62D          lea  esi,[2DA6]                               
+0008:0000A6B2 B90300              mov  cx,0003                                  
+0008:0000A6B5 EB18                jmp  short 0000A6CF ($+18)  (down)            
+0008:0000A6B7 90                  nop                                           
+0008:0000A6B8 6656                push esi                                      
+0008:0000A6BA 668D36862D          lea  esi,[2D86]                               
+0008:0000A6BF EB0B                jmp  short 0000A6CC ($+b)   (down)            
+0008:0000A6C1 90                  nop                                           
+0008:0000A6C2 6656                push esi                                      
+0008:0000A6C4 668D36782D          lea  esi,[2D78]                               
+0008:0000A6C9 EB01                jmp  short 0000A6CC ($+1)   (down)            
+0008:0000A6CB 90                  nop                                           
+0008:0000A6CC B90200              mov  cx,0002                                  
+0008:0000A6CF E873DA              call 00008145 ($-258d)                        
+0008:0000A6D2 665E                pop  esi                                      
+
+MENU CODE OFFSETS
+search for bytes: 6656668D36942D
+found 84 results
+
+MENU DEFINITION OFFSETS
+search for bytes: D4970000457A
+found 89 results
+
+Match between lea esi,[2DXX] and the menu definition:							Solution to put Buy and Sell in the menu
+
+2D74			D4 97 00 00 
+2D78			45 7A 01 00 64 04 05 92 				"OK"
+					  02 00 63 04 66 00 				"No  "					-> "No" (remove space glyph)
+2D86			45 7A 01 00 74 01 05 92 				"Y  "					2D84 (-2 bytes for glyph removed)
+					  02 00 63 04 66 00 				"No  "					-> "No" (remove space glyph)
+2D94			45 7A 02 00 86 04 CF 06 05 92 			"Rest"					2D90 (-4 bytes for glyphs removed)
+					  03 00 1F 04 E0 04 7C 01 			"Leave "
+2DA6			45 7A 01 00 88 03 05 92 				"Bu"					2DA2 (-4 bytes for glyphs removed), "Buy " (add <y > glyph)
+					  02 00 82 03 12 05 C5 A9 			"Back"
+					  01 00 8E 04 96 96 				"Se"					"Sell" (add <ll> glyph)
+					  01 00 88 03 56 AE 
+					  02 00 82 03 12 05 7F B2 
+					  02 00 AD 04 7C 01 3F CA 
+					  02 00 AA 03 7A 06 79 B2
+
